@@ -3,336 +3,903 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CardMate - หาเพื่อนเล่นการ์ดเกม</title>
-    <!-- Tailwind CSS CDN -->
+    <title>CardMate - TCG Matcher & Community</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Alpine.js สำหรับจัดการ State เบื้องต้น -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <!-- Google Fonts: Prompt -->
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         body { font-family: 'Prompt', sans-serif; }
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .glass-nav { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); }
+        #map { height: 420px; width: 100%; border-radius: 1rem; z-index: 10; overflow: hidden; }
+        .map-wrap { position: relative; }
+        #postLocationMap { height: 260px; width: 100%; border-radius: 1rem; overflow: hidden; border: 1px solid rgba(148,163,184,.25); }
+        .location-picker-wrap { position: relative; }
+        .location-picker-badge { position:absolute; left:10px; bottom:10px; z-index:500; background:rgba(15,23,42,.94); color:#e2e8f0; border:1px solid rgba(148,163,184,.25); padding:7px 10px; border-radius:10px; font:500 10px Prompt,sans-serif; box-shadow:0 8px 20px rgba(0,0,0,.22); pointer-events:none; }
+        .location-coords { background:rgba(15,23,42,.8); border:1px solid rgba(99,102,241,.25); }
+        .map-controls { position:absolute; top:12px; right:12px; z-index:500; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+        .map-control-btn { background:rgba(15,23,42,.94); color:#e2e8f0; border:1px solid rgba(148,163,184,.25); box-shadow:0 8px 24px rgba(0,0,0,.25); padding:8px 11px; border-radius:10px; font:600 11px Prompt,sans-serif; cursor:pointer; backdrop-filter:blur(8px); }
+        .map-control-btn:hover { background:#1e293b; color:#fff; }
+        .map-legend { position:absolute; bottom:12px; left:12px; z-index:500; background:rgba(15,23,42,.92); border:1px solid rgba(148,163,184,.2); padding:8px 10px; border-radius:10px; font:500 10px Prompt,sans-serif; color:#cbd5e1; box-shadow:0 8px 20px rgba(0,0,0,.22); }
+        .custom-pin { width:34px; height:34px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); background:linear-gradient(135deg,#f59e0b,#f97316); border:3px solid #fff; box-shadow:0 5px 14px rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; }
+        .custom-pin span { transform:rotate(45deg); font-size:15px; }
+        .custom-pin.shop { background:linear-gradient(135deg,#6366f1,#8b5cf6); }
+        .custom-popup .leaflet-popup-content-wrapper { background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 14px; box-shadow:0 12px 35px rgba(0,0,0,.35); }
+        .custom-popup .leaflet-popup-tip { background: #0f172a; }
+        .custom-popup .leaflet-popup-content { margin:10px 12px; }
+        .leaflet-control-zoom a { background:#0f172a !important; color:#e2e8f0 !important; border-color:#334155 !important; }
+        @media (max-width:640px){ #map{height:380px}.map-controls{left:12px;right:12px}.map-control-btn{padding:7px 9px} }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col" x-data="cardApp()">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between" x-data="cardApp()" x-init="initMap()">
 
-    <!-- Header / Navbar -->
-    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
-        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-2">
-                <span class="text-2xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">CardMate</span>
-                <span class="text-xs bg-slate-700 text-amber-400 px-2 py-0.5 rounded-full font-medium">TCG Community</span>
+    <div x-show="!isLoggedIn" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+        <div class="glass-card max-w-md w-full rounded-3xl p-8 space-y-6 border border-slate-800 shadow-2xl relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl"></div>
+            <div class="text-center space-y-2">
+                <div class="inline-flex bg-gradient-to-tr from-amber-500 to-indigo-600 p-3 rounded-2xl font-black text-2xl text-slate-950 shadow-lg mb-2">CM</div>
+                <h1 class="text-2xl font-bold text-white">ยินดีต้อนรับสู่ CardMate</h1>
+                <p class="text-xs text-slate-400">สังคมคนเล่นการ์ดเกม เข้าสู่ระบบเพื่อค้นหาคู่เล่นใกล้คุณ</p>
             </div>
-            <div class="flex items-center space-x-3">
-                <button @click="activeTab = 'profile'" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-xl text-sm font-medium transition min-h-[48px] min-w-[48px] flex items-center justify-center">
-                    👤 โปรไฟล์ของฉัน
+
+            <div x-show="loginStep === 1" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-2">เบอร์โทรศัพท์มือถือ</label>
+                    <input type="tel" x-model="phone" placeholder="08X-XXX-XXXX" maxlength="10" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-amber-300 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
+                </div>
+                <button @click="requestOtp()" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-amber-500/20">
+                    ขอรับรหัส OTP
                 </button>
             </div>
-        </div>
-    </header>
 
-    <!-- Main Container -->
-    <main class="max-w-4xl mx-auto px-4 py-6 flex-1 w-full pb-24">
-
-        <!-- Error / Loading Simulator States -->
-        <template x-if="isLoading">
-            <div class="flex flex-col items-center justify-center py-20 space-y-4">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-400"></div>
-                <p class="text-slate-400 text-lg">กำลังโหลดข้อมูลห้องและผู้เล่น...</p>
-            </div>
-        </template>
-
-        <template x-if="!isLoading">
-            <div>
-                <!-- Tab: Lobby (หน้าแรก / ค้นหาห้อง) -->
-                <div x-show="activeTab === 'lobby'" class="space-y-6">
-                    
-                    <!-- Hero Banner & Action Button -->
-                    <div class="bg-gradient-to-r from-indigo-900 to-slate-800 border border-indigo-700/50 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div>
-                            <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">หาคู่ซ้อมการ์ดเกมด่วน!</h1>
-                            <p class="text-slate-300 text-base">ไม่ว่าจะเป็น ยูกิ, โปเกม่อน, วันพีช หรือ แวนการ์ด ก็หาเพื่อนเล่นได้ทันที</p>
-                        </div>
-                        <button @click="openCreateModal()" class="w-full md:w-auto bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-4 rounded-xl text-lg shadow-lg transition flex items-center justify-center space-x-2 min-h-[48px]">
-                            <span>➕ สร้างโพสต์ชวนเล่น</span>
-                        </button>
-                    </div>
-
-                    <!-- Game Filter -->
-                    <div>
-                        <h2 class="text-lg font-semibold mb-3 text-slate-300">เลือกประเภทการ์ด</h2>
-                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                            <template x-for="game in games" :key="game.id">
-                                <button @click="selectedGame = game.id" 
-                                    :class="selectedGame === game.id ? 'bg-amber-500 text-slate-950 font-bold border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'"
-                                    class="p-3 rounded-xl border text-center transition flex flex-col items-center justify-center min-h-[56px]">
-                                    <span class="text-sm" x-text="game.name"></span>
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- Room List Section -->
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center">
-                            <h2 class="text-lg font-semibold text-slate-300">ประกาศหาเพื่อนเล่น (<span x-text="filteredRooms.length"></span>)</h2>
-                            <span class="text-xs text-slate-400">อัปเดตแบบ Real-time</span>
-                        </div>
-
-                        <div class="grid gap-4">
-                            <template x-for="room in filteredRooms" :key="room.id">
-                                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-md hover:border-slate-600 transition space-y-3">
-                                    <div class="flex justify-between items-start">
-                                        <div class="flex items-center space-x-3">
-                                            <span class="bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-lg text-xs font-semibold" x-text="room.gameType"></span>
-                                            <span class="bg-slate-700 text-slate-300 px-3 py-1 rounded-lg text-xs" x-text="room.playMode"></span>
-                                        </div>
-                                        <span class="text-xs text-amber-400 font-medium bg-amber-400/10 px-2 py-1 rounded-md" x-text="room.level"></span>
-                                    </div>
-
-                                    <div>
-                                        <h3 class="text-xl font-bold text-white mb-1" x-text="room.title"></h3>
-                                        <p class="text-slate-300 text-sm" x-text="room.note"></p>
-                                    </div>
-
-                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm text-slate-400 pt-2 border-t border-slate-700/60">
-                                        <div>📍 สถานที่: <strong class="text-slate-200" x-text="room.location"></strong></div>
-                                        <div>📅 วันเวลา: <strong class="text-slate-200" x-text="room.datetime"></strong></div>
-                                        <div>⏳ ระยะเวลา: <strong class="text-slate-200" x-text="room.duration"></strong></div>
-                                    </div>
-
-                                    <div class="flex justify-between items-center pt-2">
-                                        <div class="flex items-center space-x-2 text-sm text-slate-400">
-                                            <span>ผู้สร้าง: <strong class="text-slate-200" x-text="room.host"></strong></span>
-                                            <span class="text-emerald-400 text-xs bg-emerald-950/50 px-2 py-0.5 rounded">⭐ 4.9</span>
-                                        </div>
-                                        <button @click="joinRoom(room)" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition min-h-[48px]">
-                                            ขอเข้าร่วมวง
-                                        </button>
-                                    </div>
-                                </div>
-                            </template>
-
-                            <template x-if="filteredRooms.length === 0">
-                                <div class="text-center py-12 bg-slate-800/50 border border-dashed border-slate-700 rounded-2xl">
-                                    <p class="text-slate-400 text-base mb-2">ยังไม่มีประกาศในหมวดหมู่นี้</p>
-                                    <button @click="openCreateModal()" class="text-amber-400 font-semibold hover:underline">สร้างประกาศแรกเลย!</button>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
+            <div x-show="loginStep === 2" class="space-y-4">
+                <div class="text-center">
+                    <span class="text-xs text-indigo-400">ส่งรหัส OTP ไปที่เบอร์ <strong x-text="phone"></strong></span>
+                    <p class="text-[11px] text-slate-500 mt-1">(ทดสอบ: ใช้รหัส OTP คือ <span class="text-amber-400 font-bold">123456</span>)</p>
                 </div>
-
-                <!-- Tab: Profile (โปรไฟล์ผู้เล่น) -->
-                <div x-show="activeTab === 'profile'" class="space-y-6">
-                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 text-center space-y-4">
-                        <div class="w-20 h-20 bg-indigo-600 rounded-full mx-auto flex items-center justify-center text-3xl font-bold text-white shadow-lg">
-                            🎮
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-bold text-white">สมชาย การ์ดเก่ง</h2>
-                            <p class="text-slate-400 text-sm">สมาชิกระดับ: ผู้เล่นสายแข่งขัน (Competitive)</p>
-                        </div>
-                        <div class="flex justify-center space-x-4 pt-2">
-                            <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
-                                <div class="text-xs text-slate-400">เรตติ้ง Fair Play</div>
-                                <div class="text-lg font-bold text-amber-400">⭐ 4.98</div>
-                            </div>
-                            <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
-                                <div class="text-xs text-slate-400">จำนวนนัดเล่น</div>
-                                <div class="text-lg font-bold text-indigo-400">34 ครั้ง</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
-                        <h3 class="text-lg font-semibold text-slate-200">ร้านการ์ดประจำ & ช่วงเวลาที่สะดวก</h3>
-                        <div class="space-y-2 text-sm text-slate-300">
-                            <p>🏢 <strong>ร้านประจำ:</strong> Gateway บางซื่อ / สยามพารากอน</p>
-                            <p>⏰ <strong>เวลาว่าง:</strong> เสาร์-อาทิตย์ 13:00 - 18:00 น.</p>
-                            <p>🃏 <strong>การ์ดที่เล่นหลัก:</strong> Pokémon TCG, One Piece Card Game</p>
-                        </div>
-                    </div>
+                <div>
+                    <input type="text" x-model="otpCode" placeholder="กรอกรหัส 6 หลัก" maxlength="6" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg font-bold text-white tracking-widest focus:outline-none focus:border-indigo-500 transition">
+                </div>
+                <div class="flex space-x-2">
+                    <button @click="loginStep = 1" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl text-xs">ย้อนกลับ</button>
+                    <button @click="verifyOtp()" class="w-2/3 bg-gradient-to-r from-indigo-500 to-violet-600 hover:opacity-90 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-500/20">
+                        ยืนยันเข้าสู่ระบบ
+                    </button>
                 </div>
             </div>
-        </template>
-    </main>
-
-    <!-- Modal: สร้างโพสต์ชวนเล่น -->
-    <div x-show="isCreateModalOpen" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b border-slate-700 pb-3">
-                <h3 class="text-xl font-bold text-white">สร้างโพสต์ชวนเพื่อนเล่นการ์ด</h3>
-                <button @click="isCreateModalOpen = false" class="text-slate-400 hover:text-white text-xl font-bold p-2">✕</button>
-            </div>
-
-            <form @submit.prevent="createRoom" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">หัวข้อประกาศชวนเล่น</label>
-                    <input type="text" x-model="newRoom.title" required placeholder="เช่น หาคนซ้อมเด็ค Meta โปเกม่อน แถวสยาม" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base">
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">ประเภทการ์ดเกม</label>
-                        <select x-model="newRoom.gameType" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-400 text-base">
-                            <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
-                            <option value="Pokémon TCG">Pokémon TCG</option>
-                            <option value="One Piece">One Piece Card Game</option>
-                            <option value="Vanguard">Cardfight!! Vanguard</option>
-                            <option value="Buddyfight">Buddyfight / ตลิ่งชัน</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">ระดับความจริงจัง</label>
-                        <select x-model="newRoom.level" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-400 text-base">
-                            <option value="ซ้อมมือชิลๆ">ซ้อมมือชิลๆ</option>
-                            <option value="มือใหม่หัดเล่น">มือใหม่หัดเล่น</option>
-                            <option value="แข่งจริงจัง (Competitive)">แข่งจริงจัง (Competitive)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">สถานที่ / ช่องทางออนไลน์</label>
-                        <input type="text" x-model="newRoom.location" required placeholder="เช่น ร้านการ์ดพารากอน หรือ Discord" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-300 mb-1">วันและเวลา</label>
-                        <input type="text" x-model="newRoom.datetime" required placeholder="เช่น วันนี้ 14:00 น." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">ระยะเวลาที่จะเล่น</label>
-                    <input type="text" x-model="newRoom.duration" required placeholder="เช่น ประมาณ 2 ชั่วโมง" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">รายละเอียดเพิ่มเติม / โน้ต</label>
-                    <textarea x-model="newRoom.note" rows="3" placeholder="เช่น ขอคนเล่นเด็คธรรมดา ไม่เอาเมต้าโหดเกินไปครับ" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base"></textarea>
-                </div>
-
-                <div class="flex space-x-3 pt-2">
-                    <button type="button" @click="isCreateModalOpen = false" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-xl transition min-h-[48px]">ยกเลิก</button>
-                    <button type="submit" class="w-1/2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition min-h-[48px]">โพสต์ประกาศ</button>
-                </div>
-            </form>
         </div>
     </div>
 
-    <!-- Bottom Navigation Bar (Mobile Friendly) -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 max-w-4xl mx-auto flex justify-around p-2 z-40">
-        <button @click="activeTab = 'lobby'" :class="activeTab === 'lobby' ? 'text-amber-400' : 'text-slate-400'" class="flex flex-col items-center py-2 px-4 transition min-h-[48px]">
-            <span class="text-xl">🏠</span>
-            <span class="text-xs font-medium">หน้าแรก</span>
-        </button>
-        <button @click="openCreateModal()" class="flex flex-col items-center py-2 px-4 text-amber-400 transition min-h-[48px]">
-            <span class="text-xl">➕</span>
-            <span class="text-xs font-medium">สร้างโพสต์</span>
-        </button>
-        <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'text-amber-400' : 'text-slate-400'" class="flex flex-col items-center py-2 px-4 transition min-h-[48px]">
-            <span class="text-xl">👤</span>
-            <span class="text-xs font-medium">โปรไฟล์</span>
-        </button>
-    </nav>
+    <div x-show="isLoggedIn" class="flex flex-col min-h-screen">
+        
+        <header class="glass-nav border-b border-slate-800/80 sticky top-0 z-40">
+            <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center space-x-3 cursor-pointer" @click="activeTab = 'search'">
+                    <div class="bg-gradient-to-tr from-amber-500 to-indigo-600 p-2 rounded-xl font-black text-lg text-slate-950">CM</div>
+                    <div>
+                        <span class="text-xl font-black bg-gradient-to-r from-amber-400 via-rose-400 to-indigo-400 bg-clip-text text-transparent">CardMate</span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <button @click="activeTab = 'events'" :class="activeTab === 'events' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'" class="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                        <span>🏪 ร้านค้า & อีเวนต์</span>
+                    </button>
+                    <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'" class="px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                        <span>👤 โปรไฟล์</span>
+                    </button>
+                </div>
+            </div>
+        </header>
 
-    <!-- Application Logic Script -->
+        <main class="max-w-5xl mx-auto px-4 py-6 flex-1 w-full pb-24 space-y-6">
+
+            <div x-show="activeTab === 'search'" class="space-y-6">
+                
+                <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-900 to-slate-950 p-6 border border-indigo-500/20 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div class="space-y-1 z-10">
+                        <span class="bg-amber-400/10 text-amber-400 border border-amber-400/20 text-[11px] px-2.5 py-0.5 rounded-full font-semibold">✨ Matchmaking Platform</span>
+                        <h1 class="text-2xl font-bold text-white">หาคู่เล่นการ์ดเกมใกล้คุณ</h1>
+                        <p class="text-slate-400 text-xs">ค้นหาเพื่อนซ้อมการ์ด คัดตามระดับฝีมือ พร้อมดูภาพสถานที่ตั้งจริง</p>
+                    </div>
+                    <button @click="openCreatePostModal()" class="z-10 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold px-5 py-3 rounded-2xl text-xs transition shadow-lg shadow-amber-500/20 flex items-center gap-2 whitespace-nowrap">
+                        <span class="text-base">➕</span> โพสต์หาคู่เล่นด้วยตัวเอง
+                    </button>
+                </div>
+
+                <div class="glass-card rounded-2xl p-4 space-y-3">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-bold text-amber-400 flex items-center gap-1.5">⚡ กรองข้อมูลคู่เล่น</span>
+                        <button @click="resetFilters()" class="text-slate-400 hover:text-white underline">รีเซ็ตตัวกรอง</button>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                        <select x-model="filters.game" class="bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-amber-300 focus:outline-none">
+                            <option value="all">🎮 ทุกการ์ดเกม</option>
+                            <option value="Pokémon TCG">Pokémon TCG</option>
+                            <option value="One Piece">One Piece Card Game</option>
+                            <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
+                            <option value="MTG">Magic: The Gathering</option>
+                        </select>
+
+                        <select x-model="filters.level" class="bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
+                            <option value="all">🎯 ทุกระดับฝีมือ</option>
+                            <option value="มือใหม่">มือใหม่ (Beginner)</option>
+                            <option value="ทั่วไป">ทั่วไป (Casual)</option>
+                            <option value="Competitive">จริงจัง (Competitive)</option>
+                        </select>
+
+                        <select x-model="filters.maxDistance" class="bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
+                            <option value="999">📍 ทุกระยะทาง</option>
+                            <option value="5">ไม่เกิน 5 กม.</option>
+                            <option value="15">ไม่เกิน 15 กม.</option>
+                        </select>
+
+                        <select x-model="filters.sortBy" class="bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-indigo-300 focus:outline-none">
+                            <option value="distance">📍 เรียงตามใกล้ที่สุด</option>
+                            <option value="rating">⭐ เรียงตาม Rating</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4 rounded-2xl space-y-3 border border-indigo-500/20">
+                    <div class="flex justify-between items-center text-xs">
+                        <h3 class="font-bold text-slate-200 flex items-center gap-2">🗺️ แผนที่พิกัดและภาพสถานที่จริง</h3>
+                        <span class="text-indigo-400 font-medium" x-text="selectedMapTitle"></span>
+                    </div>
+                    <div class="map-wrap">
+                        <div id="map"></div>
+                        <div class="map-controls">
+                            <button @click="fitAllLocations()" class="map-control-btn">📍 แสดงทั้งหมด</button>
+                            <button @click="locateUser()" class="map-control-btn">🧭 ตำแหน่งฉัน</button>
+                        </div>
+                        <div class="map-legend">🟠 ผู้เล่น &nbsp; 🟣 ร้านการ์ดเกม</div>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <h2 class="font-bold text-base text-slate-200">รายการนัดเล่นพร้อมซ้อม (<span x-text="filteredPlayers.length"></span>)</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <template x-for="player in filteredPlayers" :key="player.id">
+                            <div class="glass-card rounded-2xl p-5 hover:border-slate-600 transition flex flex-col justify-between space-y-4">
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-11 h-11 bg-slate-800 border border-indigo-500/50 rounded-full flex items-center justify-center text-xl font-bold">
+                                                <span x-text="player.avatar"></span>
+                                            </div>
+                                            <div>
+                                                <div class="flex items-center space-x-1.5">
+                                                    <h3 class="font-bold text-white text-sm" x-text="player.name"></h3>
+                                                    <span x-show="player.verified" class="text-emerald-400 text-xs" title="ยืนยันตัวตนแล้ว">✓</span>
+                                                </div>
+                                                <p class="text-[11px] text-slate-400" x-text="player.zone"></p>
+                                            </div>
+                                        </div>
+                                        <span class="bg-amber-400/10 text-amber-400 text-xs px-2.5 py-1 rounded-lg font-bold border border-amber-400/20" x-text="'⭐ ' + player.rating"></span>
+                                    </div>
+
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <template x-for="g in player.games" :key="g">
+                                            <span class="bg-indigo-950 text-indigo-300 border border-indigo-800/60 text-[10px] px-2 py-0.5 rounded-md font-medium" x-text="g"></span>
+                                        </template>
+                                        <span class="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-md" x-text="player.level"></span>
+                                    </div>
+
+                                    <div class="bg-slate-900/80 p-3 rounded-xl space-y-2 border border-slate-800">
+                                        <div class="flex gap-3 items-center">
+                                            <img :src="player.locationImg" alt="สถานที่จริง" class="w-16 h-16 rounded-lg object-cover border border-slate-700 flex-shrink-0">
+                                            <div class="space-y-0.5 text-xs text-slate-300 overflow-hidden">
+                                                <p class="truncate"><strong>🃏 เด็ค:</strong> <span x-text="player.favoriteDeck"></span></p>
+                                                <p class="truncate"><strong>📍 นัดพบ:</strong> <span x-text="player.locationName"></span> (<span x-text="player.distance + ' กม.'"></span>)</p>
+                                                <p class="truncate text-amber-300/90"><strong>⏰ เวลา:</strong> <span x-text="player.availability"></span></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex space-x-2 pt-1">
+                                    <button @click="showPlayerLocation(player)" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2 rounded-xl text-xs transition">
+                                        🗺️ พิกัดร้าน
+                                    </button>
+                                    <button @click="openMatchRequestModal(player)" class="w-2/3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 rounded-xl text-xs transition">
+                                        ✉️ ทักทาย/ท้าดวล
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="activeTab === 'events'" class="space-y-4">
+                <h2 class="text-lg font-bold text-amber-400">🏪 ร้านการ์ดเกมที่เป็นจุดนัดพบ (Verified Game Stores)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <template x-for="shop in shops" :key="shop.id">
+                        <div class="glass-card rounded-2xl overflow-hidden border border-slate-800 flex flex-col justify-between">
+                            <img :src="shop.img" alt="ภาพร้าน" class="w-full h-36 object-cover">
+                            <div class="p-4 space-y-3">
+                                <div>
+                                    <h4 class="font-bold text-white text-base" x-text="shop.name"></h4>
+                                    <p class="text-xs text-slate-400" x-text="shop.address"></p>
+                                </div>
+                                <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-xs text-amber-300 font-semibold">
+                                    🏆 อีเวนต์ถัดไป: <span x-text="shop.event"></span>
+                                </div>
+                                <button @click="focusMapOnShop(shop)" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2 rounded-xl border border-slate-700">
+                                    📍 ดูตำแหน่งบนแผนที่
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div x-show="activeTab === 'profile'" class="space-y-6">
+                <div class="glass-card p-6 rounded-3xl space-y-6">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-20 h-20 bg-gradient-to-tr from-indigo-500 to-amber-500 rounded-full flex items-center justify-center text-3xl border-2 border-slate-700 shadow-xl">
+                            🧙‍♂️
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex items-center space-x-2">
+                                <h2 class="text-xl font-bold text-white" x-text="user.name"></h2>
+                                <span class="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold">✓ Verified</span>
+                            </div>
+                            <p class="text-xs text-slate-400" x-text="'เบอร์โทร: ' + phone"></p>
+                            <p class="text-xs text-indigo-400" x-text="'📍 โซนประจำ: ' + user.zone"></p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
+                            <span class="text-[11px] text-slate-400 block">Rating ความประพฤติ</span>
+                            <span class="text-base font-bold text-amber-400" x-text="'⭐ ' + user.rating"></span>
+                        </div>
+                        <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
+                            <span class="text-[11px] text-slate-400 block">แมตช์ที่เล่นแล้ว</span>
+                            <span class="text-base font-bold text-indigo-400" x-text="user.matchesCount + ' ครั้ง'"></span>
+                        </div>
+                        <div class="col-span-2 sm:col-span-1 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
+                            <span class="text-[11px] text-slate-400 block">สถานะ Fair Play</span>
+                            <span class="text-base font-bold text-emerald-400">ผู้เล่นชั้นดี</span>
+                        </div>
+                    </div>
+
+                    <button @click="isLoggedIn = false" class="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 py-2.5 rounded-xl text-xs font-bold transition">
+                        ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+
+        </main>
+
+        <div x-show="isCreatePostModalOpen" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div class="glass-card rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-slate-700">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                    <h3 class="text-base font-bold text-amber-400">➕ สร้างโพสต์นัดเล่นด้วยตัวเอง</h3>
+                    <button @click="isCreatePostModalOpen = false" class="text-slate-400 hover:text-white text-lg">✕</button>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="block text-slate-400 mb-1">การ์ดเกมที่จะเล่น</label>
+                        <select x-model="newPost.game" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white">
+                            <option value="Pokémon TCG">Pokémon TCG</option>
+                            <option value="One Piece">One Piece Card Game</option>
+                            <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
+                            <option value="MTG">Magic: The Gathering</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-400 mb-1">เด็คที่จะนำมาเล่น</label>
+                        <input type="text" x-model="newPost.favoriteDeck" placeholder="เช่น Charizard ex / Lugia VSTAR" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">ระดับฝีมือ</label>
+                            <select x-model="newPost.level" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white">
+                                <option value="มือใหม่">มือใหม่</option>
+                                <option value="ทั่วไป">ทั่วไป</option>
+                                <option value="Competitive">จริงจัง</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">เวลาที่สะดวก</label>
+                            <input type="text" x-model="newPost.availability" placeholder="เช่น วันนี้ 17:00 น." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white">
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <label class="block text-slate-400">📍 ปักหมุดสถานที่นัดเจอ</label>
+                            <button type="button" @click="useMyLocationForPost()" class="text-[10px] font-semibold text-indigo-300 hover:text-indigo-200 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1.5 rounded-lg">
+                                🧭 ใช้ตำแหน่งฉัน
+                            </button>
+                        </div>
+
+                        <div class="location-picker-wrap">
+                            <div id="postLocationMap"></div>
+                            <div class="location-picker-badge">👆 แตะ/คลิกบนแผนที่เพื่อปักหมุด</div>
+                        </div>
+
+                        <div class="location-coords rounded-xl p-2.5 text-[10px] text-slate-300">
+                            <div class="flex justify-between gap-2">
+                                <span>ละติจูด: <strong class="text-indigo-300" x-text="newPost.lat ? newPost.lat.toFixed(6) : '-'"></strong></span>
+                                <span>ลองจิจูด: <strong class="text-indigo-300" x-text="newPost.lng ? newPost.lng.toFixed(6) : '-'"></strong></span>
+                            </div>
+                            <p class="text-slate-500 mt-1">ระบบจะบันทึกพิกัดที่ปักหมุดไปกับโพสต์</p>
+                        </div>
+
+                        <select x-model="newPost.locationIndex" @change="selectPresetLocation()" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-amber-300">
+                            <option value="0">สยามสแควร์ (ปทุมวัน)</option>
+                            <option value="1">Gateway บางซื่อ</option>
+                            <option value="2">เซ็นทรัล ลาดพร้าว</option>
+                        </select>
+                        <p class="text-[10px] text-slate-500">เลือกสถานที่สำเร็จรูปได้ หรือปักหมุดจุดอื่นบนแผนที่ได้ทันที</p>
+                    </div>
+                </div>
+
+                <div class="flex space-x-2 pt-2">
+                    <button @click="isCreatePostModalOpen = false" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-semibold">ยกเลิก</button>
+                    <button @click="submitPost()" class="w-1/2 bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 text-slate-950 font-bold py-2.5 rounded-xl text-xs">เผยแพร่โพสต์</button>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="isMatchModalOpen" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div class="glass-card rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                <h3 class="text-base font-bold text-amber-400" x-text="'ส่งคำขอเล่นถึง ' + (targetPlayer ? targetPlayer.name : '')"></h3>
+                <div class="space-y-3">
+                    <textarea x-model="matchMessage" rows="3" placeholder="ระบุข้อความทักทาย เช่น ซ้อมเด็ค Pokémon Commander กันไหมครับ?" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-400"></textarea>
+                </div>
+                <div class="flex space-x-2">
+                    <button @click="isMatchModalOpen = false" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-semibold">ยกเลิก</button>
+                    <button @click="sendMatchRequest()" class="w-1/2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs">ส่งคำขอทันที</button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="fixed bottom-0 left-0 right-0 glass-nav border-t border-slate-800/80 max-w-5xl mx-auto flex justify-around p-2 z-40">
+            <button @click="activeTab = 'search'" :class="activeTab === 'search' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center py-1">
+                <span class="text-base">🔍</span>
+                <span class="text-[10px]">ค้นหาคู่เล่น</span>
+            </button>
+            <button @click="activeTab = 'events'" :class="activeTab === 'events' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center py-1">
+                <span class="text-base">🏆</span>
+                <span class="text-[10px]">ร้านค้า/อีเวนต์</span>
+            </button>
+            <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center py-1">
+                <span class="text-base">👤</span>
+                <span class="text-[10px]">โปรไฟล์ฉัน</span>
+            </button>
+        </nav>
+    </div>
+
     <script>
         function cardApp() {
             return {
-                isLoading: false,
-                activeTab: 'lobby',
-                selectedGame: 'all',
-                isCreateModalOpen: false,
-                games: [
-                    { id: 'all', name: 'ทั้งหมด' },
-                    { id: 'Yu-Gi-Oh!', name: 'ยูกิโอ' },
-                    { id: 'Pokémon TCG', name: 'โปเกม่อน' },
-                    { id: 'One Piece', name: 'วันพีช' },
-                    { id: 'Vanguard', name: 'แวนการ์ด' },
-                    { id: 'Buddyfight', name: 'ตลิ่งชัน' }
+                // Auth States
+                isLoggedIn: false,
+                loginStep: 1,
+                phone: '',
+                otpCode: '',
+
+                // App States
+                activeTab: 'search',
+                map: null,
+                markers: [],
+                postLocationMap: null,
+                postLocationMarker: null,
+                selectedMapTitle: 'แสดงพิกัดผู้เล่นทั้งหมด',
+                userMarker: null,
+                userAccuracyCircle: null,
+                shopMarkers: [],
+                isMatchModalOpen: false,
+                isCreatePostModalOpen: false,
+                targetPlayer: null,
+                matchMessage: '',
+
+                // Post Creation Form
+                newPost: {
+                    game: 'Pokémon TCG',
+                    favoriteDeck: '',
+                    level: 'ทั่วไป',
+                    availability: '',
+                    locationIndex: '0',
+                    lat: 13.7456,
+                    lng: 100.5342
+                },
+
+                // User Profile
+                user: {
+                    name: 'พิษณุพงษ์ CardPlayer',
+                    verified: true,
+                    level: 'Competitive',
+                    zone: 'ปทุมวัน / กรุงเทพฯ',
+                    rating: 4.98,
+                    matchesCount: 15
+                },
+
+                // Filters
+                filters: {
+                    game: 'all',
+                    level: 'all',
+                    maxDistance: '999',
+                    sortBy: 'distance'
+                },
+
+                // Preset Locations ( real Bangkok locations with images )
+                presetLocations: [
+                    { name: 'สยามสแควร์ (Card Game Zone)', lat: 13.7456, lng: 100.5342, img: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&q=80', zone: 'ปทุมวัน, กรุงเทพฯ' },
+                    { name: 'Gateway บางซื่อ TCG Space', lat: 13.8041, lng: 100.5226, img: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400&q=80', zone: 'บางซื่อ, กรุงเทพฯ' },
+                    { name: 'เซ็นทรัล ลาดพร้าว Boardgame Hub', lat: 13.8160, lng: 100.5606, img: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&q=80', zone: 'จตุจักร, กรุงเทพฯ' }
                 ],
-                rooms: [
+
+                // Mock Data Players
+                players: [
                     {
                         id: 1,
-                        gameType: 'Pokémon TCG',
-                        playMode: 'นัดเจอที่ร้าน',
-                        level: 'ซ้อมมือชิลๆ',
-                        title: 'หาคนซ้อมเด็ค Charizard แถวสยาม',
-                        note: 'ขอคนเล่นไม่เครียด มาลองเด็คใหม่กันครับ',
-                        location: 'การ์ดคลาสสิค สยามสแควร์',
-                        datetime: 'วันนี้ 15:00 น.',
-                        duration: '2 ชั่วโมง',
-                        host: 'คุณต้น การ์ดจอ'
+                        name: 'คุณต้น การ์ดจอ',
+                        avatar: '🐲',
+                        verified: true,
+                        level: 'ทั่วไป',
+                        games: ['Pokémon TCG', 'One Piece'],
+                        favoriteDeck: 'Charizard ex / Lugia',
+                        locationName: 'สยามสแควร์',
+                        locationImg: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&q=80',
+                        lat: 13.7456,
+                        lng: 100.5342,
+                        distance: 1.2,
+                        zone: 'ปทุมวัน, กรุงเทพฯ',
+                        availability: 'เสาร์-อาทิตย์ 13:00 - 18:00 น.',
+                        rating: 4.9
                     },
                     {
                         id: 2,
-                        gameType: 'Yu-Gi-Oh!',
-                        playMode: 'ออนไลน์ / Webcam',
-                        level: 'แข่งจริงจัง (Competitive)',
-                        title: 'หาคู่ซ้อมไต่อันดับ ลุยงานแข่งใหญ่',
-                        note: 'ใช้แบนลิสต์ปัจจุบัน ซ้อมยาวๆ 3 เกมรวด',
-                        location: 'Discord Online',
-                        datetime: 'พรุ่งนี้ 20:00 น.',
-                        duration: '1.5 ชั่วโมง',
-                        host: 'น้าเอก ยูกิ'
+                        name: 'น้าเอก ยูกิ',
+                        avatar: '🃏',
+                        verified: true,
+                        level: 'Competitive',
+                        games: ['Yu-Gi-Oh!', 'MTG'],
+                        favoriteDeck: 'Snake-Eye / Modern Burn',
+                        locationName: 'Gateway บางซื่อ',
+                        locationImg: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400&q=80',
+                        lat: 13.8041,
+                        lng: 100.5226,
+                        distance: 6.5,
+                        zone: 'บางซื่อ, กรุงเทพฯ',
+                        availability: 'จันทร์-ศุกร์ 18:00 - 21:00 น.',
+                        rating: 4.8
                     },
                     {
                         id: 3,
-                        gameType: 'One Piece',
-                        playMode: 'นัดเจอที่ร้าน',
-                        level: 'มือใหม่หัดเล่น',
-                        title: 'มือใหม่หัดจับการ์ดวันพีช ใครว่างสอนทีครับ',
-                        note: 'เพิ่งซื้อ Starter Deck มา อยากลองจับคู่จริง',
-                        location: 'Gateway บางซื่อ',
-                        datetime: 'เสาร์นี้ 13:00 น.',
-                        duration: '2 ชั่วโมง',
-                        host: 'น้องเมย์ โปเกม่อน'
+                        name: 'น้องเมย์ สายชิว',
+                        avatar: '🎲',
+                        verified: false,
+                        level: 'มือใหม่',
+                        games: ['One Piece', 'Pokémon TCG'],
+                        favoriteDeck: 'Starter Deck Nami',
+                        locationName: 'เซ็นทรัล ลาดพร้าว',
+                        locationImg: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&q=80',
+                        lat: 13.8160,
+                        lng: 100.5606,
+                        distance: 8.0,
+                        zone: 'จตุจักร, กรุงเทพฯ',
+                        availability: 'เสาร์ 14:00 - 17:00 น.',
+                        rating: 5.0
                     }
                 ],
-                newRoom: {
-                    title: '',
-                    gameType: 'Pokémon TCG',
-                    level: 'ซ้อมมือชิลๆ',
-                    playMode: 'นัดเจอที่ร้าน',
-                    location: '',
-                    datetime: '',
-                    duration: '',
-                    note: ''
+
+                // Shops Data
+                shops: [
+                    { id: 101, name: 'Card Game Club (สยาม)', address: 'สยามสแควร์ ซอย 5', lat: 13.7450, lng: 100.5330, event: 'Pokémon City League', img: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&q=80' },
+                    { id: 102, name: 'Monster TCG Shop', address: 'Gateway บางซื่อ ชั้น 3', lat: 13.8045, lng: 100.5230, event: 'Yu-Gi-Oh! Local Tournament', img: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400&q=80' }
+                ],
+
+                // Auth Functions
+                requestOtp() {
+                    if (this.phone.length < 9) return alert('กรุณากรอกเบอร์โทรศัพท์ให้ครบถ้วน');
+                    this.loginStep = 2;
                 },
-                get filteredRooms() {
-                    if (this.selectedGame === 'all') return this.rooms;
-                    return this.rooms.filter(r => r.gameType === this.selectedGame);
+
+                verifyOtp() {
+                    if (this.otpCode === '123456') {
+                        this.isLoggedIn = true;
+                        this.initMap();
+                    } else {
+                        alert('รหัส OTP ไม่ถูกต้อง (กรุณาใช้รหัส: 123456)');
+                    }
                 },
-                openCreateModal() {
-                    this.isCreateModalOpen = true;
-                },
-                createRoom() {
-                    if(!this.newRoom.title || !this.newRoom.location) return;
-                    this.rooms.unshift({
-                        id: Date.now(),
-                        title: this.newRoom.title,
-                        gameType: this.newRoom.gameType,
-                        level: this.newRoom.level,
-                        playMode: this.newRoom.location.includes('Online') ? 'ออนไลน์ / Webcam' : 'นัดเจอที่ร้าน',
-                        location: this.newRoom.location,
-                        datetime: this.newRoom.datetime,
-                        duration: this.newRoom.duration,
-                        note: this.newRoom.note,
-                        host: 'ฉันเอง (ผู้ใช้งาน)'
+
+                // Filters Logic
+                get filteredPlayers() {
+                    return this.players.filter(p => {
+                        const matchGame = this.filters.game === 'all' || p.games.includes(this.filters.game);
+                        const matchLevel = this.filters.level === 'all' || p.level === this.filters.level;
+                        const matchDist = parseFloat(p.distance) <= parseFloat(this.filters.maxDistance);
+                        return matchGame && matchLevel && matchDist;
+                    }).sort((a, b) => {
+                        if (this.filters.sortBy === 'distance') return a.distance - b.distance;
+                        if (this.filters.sortBy === 'rating') return b.rating - a.rating;
+                        return 0;
                     });
-                    // รีเซ็ตฟอร์ม
-                    this.newRoom = { title: '', gameType: 'Pokémon TCG', level: 'ซ้อมมือชิลๆ', playMode: 'นัดเจอที่ร้าน', location: '', datetime: '', duration: '', note: '' };
-                    this.isCreateModalOpen = false;
-                    alert('สร้างโพสต์ชวนเล่นสำเร็จ!');
                 },
-                joinRoom(room) {
-                    alert(`ส่งคำขอเข้าร่วมห้อง "${room.title}" เรียบร้อยแล้ว! โปรดรอเจ้าของห้องติดต่อกลับ`);
+
+                resetFilters() {
+                    this.filters = { game: 'all', level: 'all', maxDistance: '999', sortBy: 'distance' };
+                },
+
+                // Map Functions (Leaflet)
+                initMap() {
+                    setTimeout(() => {
+                        if (this.map) {
+                            this.map.invalidateSize();
+                            return;
+                        }
+
+                        this.map = L.map('map', {
+                            zoomControl: true,
+                            scrollWheelZoom: true,
+                            attributionControl: true
+                        }).setView([13.7563, 100.5018], 12);
+
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 19,
+                            attribution: '&copy; OpenStreetMap contributors'
+                        }).addTo(this.map);
+
+                        this.renderMapMarkers();
+                        this.addShopMarkers();
+                        this.$watch('filters', () => this.renderMapMarkers(), {deep:true});
+                        this.$watch('activeTab', (tab) => {
+                            if (tab === 'search' && this.map) setTimeout(() => this.map.invalidateSize(), 120);
+                        });
+
+                        // ทำให้แผนที่ปรับขนาดถูกต้องหลังแสดงผล/เปลี่ยนแท็บ
+                        setTimeout(() => this.map.invalidateSize(), 150);
+                    }, 300);
+                },
+
+                createPinIcon(type = 'player') {
+                    return L.divIcon({
+                        className: '',
+                        html: `<div class="custom-pin ${type === 'shop' ? 'shop' : ''}"><span>${type === 'shop' ? '🏪' : '🃏'}</span></div>`,
+                        iconSize: [34, 34],
+                        iconAnchor: [17, 34],
+                        popupAnchor: [0, -32]
+                    });
+                },
+
+                clearPlayerMarkers() {
+                    this.markers.forEach(m => this.map.removeLayer(m));
+                    this.markers = [];
+                },
+
+                renderMapMarkers() {
+                    if (!this.map) return;
+                    this.clearPlayerMarkers();
+
+                    // แสดงเฉพาะผู้เล่นที่ผ่านตัวกรองปัจจุบัน
+                    this.filteredPlayers.forEach(p => {
+                        const popupContent = `
+                            <div class="custom-popup text-xs" style="min-width:190px">
+                                <img src="${p.locationImg}" style="width:100%;height:85px;object-fit:cover;border-radius:9px;margin-bottom:7px">
+                                <b style="color:#fbbf24;font-size:13px">${p.name}</b>
+                                ${p.verified ? '<span style="color:#34d399"> ✓ Verified</span>' : ''}<br>
+                                <span>📍 ${p.locationName}</span><br>
+                                <span style="color:#a5b4fc">🃏 ${p.favoriteDeck}</span><br>
+                                <span>🎯 ${p.level} · ⭐ ${p.rating}</span><br>
+                                <span style="color:#fcd34d">⏰ ${p.availability}</span>
+                                <div style="margin-top:8px">
+                                    <button onclick="window.cardMateFocusPlayer(${p.id})"
+                                        style="width:100%;padding:7px;border:0;border-radius:8px;background:#f59e0b;color:#0f172a;font-weight:700;cursor:pointer">
+                                        ดูรายละเอียดพิกัด
+                                    </button>
+                                </div>
+                            </div>`;
+
+                        const marker = L.marker([p.lat, p.lng], {
+                            icon: this.createPinIcon('player'),
+                            title: `${p.name} - ${p.locationName}`
+                        }).addTo(this.map).bindPopup(popupContent, {
+                            className: 'custom-popup',
+                            maxWidth: 280
+                        });
+
+                        marker.playerId = p.id;
+                        this.markers.push(marker);
+                    });
+
+                    this.selectedMapTitle = this.filteredPlayers.length
+                        ? `แสดง ${this.filteredPlayers.length} พิกัดตามตัวกรอง`
+                        : 'ไม่พบพิกัดตามตัวกรอง';
+                },
+
+                addShopMarkers() {
+                    if (!this.map) return;
+                    if (this.shopMarkers) this.shopMarkers.forEach(m => this.map.removeLayer(m));
+                    this.shopMarkers = [];
+
+                    this.shops.forEach(shop => {
+                        const marker = L.marker([shop.lat, shop.lng], {
+                            icon: this.createPinIcon('shop'),
+                            title: shop.name
+                        }).addTo(this.map).bindPopup(`
+                            <div class="custom-popup text-xs">
+                                <b style="color:#a5b4fc;font-size:13px">🏪 ${shop.name}</b><br>
+                                <span>📍 ${shop.address}</span><br>
+                                <span style="color:#fcd34d">🏆 ${shop.event}</span>
+                            </div>`, {className:'custom-popup'});
+                        this.shopMarkers.push(marker);
+                    });
+                },
+
+                fitAllLocations() {
+                    if (!this.map) return;
+                    const points = [
+                        ...this.filteredPlayers.map(p => [p.lat, p.lng]),
+                        ...this.shops.map(s => [s.lat, s.lng])
+                    ];
+                    if (!points.length) return;
+                    this.map.fitBounds(L.latLngBounds(points), {padding:[35,35], maxZoom:14});
+                    this.selectedMapTitle = 'แสดงพิกัดผู้เล่นและร้านค้าทั้งหมด';
+                },
+
+                showPlayerLocation(player) {
+                    if (!this.map) return;
+                    this.activeTab = 'search';
+                    setTimeout(() => {
+                        this.map.invalidateSize();
+                        this.map.flyTo([player.lat, player.lng], 16, {duration:0.8});
+
+                        const marker = this.markers.find(m => m.playerId === player.id);
+                        if (marker) marker.openPopup();
+
+                        this.selectedMapTitle = `📍 ${player.locationName} · ${player.distance} กม.`;
+                    }, 150);
+                },
+
+                focusMapOnShop(shop) {
+                    this.activeTab = 'search';
+                    setTimeout(() => {
+                        if (this.map) {
+                            this.map.invalidateSize();
+                            this.map.flyTo([shop.lat, shop.lng], 17, {duration:0.8});
+                            const shopMarker = this.shopMarkers?.find(m =>
+                                Math.abs(m.getLatLng().lat - shop.lat) < 0.0001 &&
+                                Math.abs(m.getLatLng().lng - shop.lng) < 0.0001
+                            );
+                            if (shopMarker) shopMarker.openPopup();
+                            this.selectedMapTitle = `🏪 ${shop.name}`;
+                        }
+                    }, 200);
+                },
+
+                locateUser() {
+                    if (!this.map) return;
+                    this.selectedMapTitle = 'กำลังค้นหาตำแหน่งของคุณ...';
+
+                    this.map.locate({
+                        setView: false,
+                        enableHighAccuracy: true,
+                        maximumAge: 30000,
+                        timeout: 10000
+                    }).once('locationfound', (e) => {
+                        if (this.userMarker) this.map.removeLayer(this.userMarker);
+                        if (this.userAccuracyCircle) this.map.removeLayer(this.userAccuracyCircle);
+
+                        this.userAccuracyCircle = L.circle(e.latlng, {
+                            radius: e.accuracy,
+                            color: '#818cf8',
+                            fillColor: '#818cf8',
+                            fillOpacity: 0.12,
+                            weight: 1
+                        }).addTo(this.map);
+
+                        this.userMarker = L.marker(e.latlng, {
+                            icon: L.divIcon({
+                                className: '',
+                                html: '<div style="width:18px;height:18px;border-radius:50%;background:#6366f1;border:4px solid white;box-shadow:0 2px 10px rgba(0,0,0,.4)"></div>',
+                                iconSize:[18,18],
+                                iconAnchor:[9,9]
+                            }),
+                            zIndexOffset: 1000
+                        }).addTo(this.map).bindPopup(
+                            `<div class="custom-popup text-xs"><b style="color:#a5b4fc">🧭 ตำแหน่งของคุณ</b><br>ความแม่นยำประมาณ ${Math.round(e.accuracy)} เมตร</div>`,
+                            {className:'custom-popup'}
+                        ).openPopup();
+
+                        this.map.flyTo(e.latlng, 15, {duration:0.8});
+                        this.selectedMapTitle = `🧭 ตำแหน่งคุณ · แม่นยำ ~${Math.round(e.accuracy)} ม.`;
+                    }).once('locationerror', () => {
+                        this.selectedMapTitle = 'ไม่สามารถเข้าถึงตำแหน่งได้';
+                        alert('ไม่สามารถระบุตำแหน่งได้ กรุณาอนุญาต Location ให้เว็บไซต์ก่อน');
+                    });
+                },
+
+                // Modal Actions
+                openCreatePostModal() {
+                    this.isCreatePostModalOpen = true;
+                    // รอให้ modal แสดงผลก่อนสร้าง/ปรับขนาดแผนที่
+                    setTimeout(() => this.initPostLocationMap(), 120);
+                },
+
+                initPostLocationMap() {
+                    const defaultLat = Number(this.newPost.lat) || 13.7563;
+                    const defaultLng = Number(this.newPost.lng) || 100.5018;
+
+                    if (!this.postLocationMap) {
+                        this.postLocationMap = L.map('postLocationMap', {
+                            zoomControl: true,
+                            scrollWheelZoom: true,
+                            attributionControl: true
+                        }).setView([defaultLat, defaultLng], 15);
+
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 19,
+                            attribution: '&copy; OpenStreetMap contributors'
+                        }).addTo(this.postLocationMap);
+
+                        this.postLocationMap.on('click', (e) => {
+                            this.setPostLocation(e.latlng.lat, e.latlng.lng, false);
+                        });
+                    } else {
+                        this.postLocationMap.invalidateSize();
+                        this.postLocationMap.setView([defaultLat, defaultLng], 15);
+                    }
+
+                    this.setPostLocation(defaultLat, defaultLng, false);
+                    setTimeout(() => this.postLocationMap?.invalidateSize(), 100);
+                },
+
+                setPostLocation(lat, lng, moveMap = true) {
+                    lat = Number(lat);
+                    lng = Number(lng);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+                    this.newPost.lat = lat;
+                    this.newPost.lng = lng;
+
+                    if (!this.postLocationMap) return;
+
+                    if (this.postLocationMarker) {
+                        this.postLocationMap.removeLayer(this.postLocationMarker);
+                    }
+
+                    this.postLocationMarker = L.marker([lat, lng], {
+                        draggable: true,
+                        icon: this.createPinIcon('player'),
+                        title: 'จุดนัดพบของคุณ'
+                    }).addTo(this.postLocationMap);
+
+                    this.postLocationMarker.bindPopup(
+                        `<div class="custom-popup text-xs"><b style="color:#fbbf24">📍 จุดนัดพบ</b><br>ละติจูด ${lat.toFixed(6)}<br>ลองจิจูด ${lng.toFixed(6)}</div>`,
+                        {className:'custom-popup'}
+                    );
+
+                    this.postLocationMarker.on('dragend', (e) => {
+                        const pos = e.target.getLatLng();
+                        this.setPostLocation(pos.lat, pos.lng, false);
+                    });
+
+                    if (moveMap) {
+                        this.postLocationMap.flyTo([lat, lng], Math.max(this.postLocationMap.getZoom(), 15), {duration:0.5});
+                    }
+                },
+
+                selectPresetLocation() {
+                    const index = parseInt(this.newPost.locationIndex, 10);
+                    const loc = this.presetLocations[index];
+                    if (!loc) return;
+                    this.setPostLocation(loc.lat, loc.lng, true);
+                },
+
+                useMyLocationForPost() {
+                    if (!navigator.geolocation) {
+                        return alert('เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง');
+                    }
+
+                    this.selectedMapTitle = 'กำลังค้นหาตำแหน่งของคุณ...';
+
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const { latitude, longitude, accuracy } = position.coords;
+                            this.setPostLocation(latitude, longitude, true);
+                            this.newPost.locationIndex = '';
+                            this.selectedMapTitle = `📍 ปักหมุดตำแหน่งคุณ · แม่นยำ ~${Math.round(accuracy)} ม.`;
+                        },
+                        () => {
+                            alert('ไม่สามารถระบุตำแหน่งได้ กรุณาอนุญาต Location ให้เว็บไซต์ก่อน');
+                        },
+                        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+                    );
+                },
+
+                submitPost() {
+                    if (!this.newPost.favoriteDeck || !this.newPost.availability) {
+                        return alert('กรุณากรอกข้อมูลเด็คและเวลาที่สะดวกให้ครบถ้วน');
+                    }
+
+                    const lat = Number(this.newPost.lat);
+                    const lng = Number(this.newPost.lng);
+
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                        return alert('กรุณาปักหมุดสถานที่นัดพบก่อนเผยแพร่โพสต์');
+                    }
+
+                    const selectedIndex = parseInt(this.newPost.locationIndex, 10);
+                    const preset = this.presetLocations[selectedIndex];
+                    const isPresetMatch = preset &&
+                        Math.abs(lat - preset.lat) < 0.00005 &&
+                        Math.abs(lng - preset.lng) < 0.00005;
+
+                    const locName = isPresetMatch
+                        ? preset.name
+                        : `จุดนัดพบที่ปักหมุด (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+                    const locImg = isPresetMatch
+                        ? preset.img
+                        : 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&q=80';
+                    const locZone = isPresetMatch
+                        ? preset.zone
+                        : 'ตำแหน่งที่ผู้ใช้ปักหมุด';
+
+                    const newEntry = {
+                        id: Date.now(),
+                        name: this.user.name + ' (โพสต์ของคุณ)',
+                        avatar: '🧙‍♂️',
+                        verified: true,
+                        level: this.newPost.level,
+                        games: [this.newPost.game],
+                        favoriteDeck: this.newPost.favoriteDeck,
+                        locationName: locName,
+                        locationImg: locImg,
+                        lat: lat,
+                        lng: lng,
+                        distance: 0.5,
+                        zone: locZone,
+                        availability: this.newPost.availability,
+                        rating: 5.0
+                    };
+
+                    this.players.unshift(newEntry);
+                    this.renderMapMarkers();
+                    this.isCreatePostModalOpen = false;
+
+                    this.newPost.locationIndex = '0';
+                    this.newPost.lat = this.presetLocations[0].lat;
+                    this.newPost.lng = this.presetLocations[0].lng;
+
+                    alert('สร้างโพสต์นัดเล่นสำเร็จแล้ว!');
+                },
+
+                openMatchRequestModal(player) {
+                    this.targetPlayer = player;
+                    this.matchMessage = '';
+                    this.isMatchModalOpen = true;
+                },
+
+                sendMatchRequest() {
+                    if (!this.matchMessage) return alert('กรุณาระบุข้อความสั้นๆ ถึงคู่เล่น');
+                    alert(`ส่งคำขอถึงคุณ "${this.targetPlayer.name}" เรียบร้อยแล้ว!`);
+                    this.isMatchModalOpen = false;
                 }
             }
         }
+    // ให้ปุ่มใน Leaflet popup เรียกกลับมาที่ Alpine component ได้
+    window.cardMateFocusPlayer = function(id) {
+        const el = document.querySelector('[x-data="cardApp()"]');
+        if (el && el.__x) {
+            const app = el.__x.$data;
+            const player = app.players.find(p => p.id === id);
+            if (player) app.showPlayerLocation(player);
+        }
+    };
     </script>
 </body>
 </html>
