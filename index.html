@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CardMate - หาเพื่อนเล่นการ์ดเกม</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js สำหรับจัดการ State เบื้องต้น -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Google Fonts: Prompt -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col" x-data="cardApp()">
+
+    <!-- Header / Navbar -->
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <span class="text-2xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">CardMate</span>
+                <span class="text-xs bg-slate-700 text-amber-400 px-2 py-0.5 rounded-full font-medium">TCG Community</span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button @click="activeTab = 'profile'" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-xl text-sm font-medium transition min-h-[48px] min-w-[48px] flex items-center justify-center">
+                    👤 โปรไฟล์ของฉัน
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-4xl mx-auto px-4 py-6 flex-1 w-full pb-24">
+
+        <!-- Error / Loading Simulator States -->
+        <template x-if="isLoading">
+            <div class="flex flex-col items-center justify-center py-20 space-y-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-400"></div>
+                <p class="text-slate-400 text-lg">กำลังโหลดข้อมูลห้องและผู้เล่น...</p>
+            </div>
+        </template>
+
+        <template x-if="!isLoading">
+            <div>
+                <!-- Tab: Lobby (หน้าแรก / ค้นหาห้อง) -->
+                <div x-show="activeTab === 'lobby'" class="space-y-6">
+                    
+                    <!-- Hero Banner & Action Button -->
+                    <div class="bg-gradient-to-r from-indigo-900 to-slate-800 border border-indigo-700/50 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">หาคู่ซ้อมการ์ดเกมด่วน!</h1>
+                            <p class="text-slate-300 text-base">ไม่ว่าจะเป็น ยูกิ, โปเกม่อน, วันพีช หรือ แวนการ์ด ก็หาเพื่อนเล่นได้ทันที</p>
+                        </div>
+                        <button @click="openCreateModal()" class="w-full md:w-auto bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-4 rounded-xl text-lg shadow-lg transition flex items-center justify-center space-x-2 min-h-[48px]">
+                            <span>➕ สร้างโพสต์ชวนเล่น</span>
+                        </button>
+                    </div>
+
+                    <!-- Game Filter -->
+                    <div>
+                        <h2 class="text-lg font-semibold mb-3 text-slate-300">เลือกประเภทการ์ด</h2>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                            <template x-for="game in games" :key="game.id">
+                                <button @click="selectedGame = game.id" 
+                                    :class="selectedGame === game.id ? 'bg-amber-500 text-slate-950 font-bold border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'"
+                                    class="p-3 rounded-xl border text-center transition flex flex-col items-center justify-center min-h-[56px]">
+                                    <span class="text-sm" x-text="game.name"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Room List Section -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-lg font-semibold text-slate-300">ประกาศหาเพื่อนเล่น (<span x-text="filteredRooms.length"></span>)</h2>
+                            <span class="text-xs text-slate-400">อัปเดตแบบ Real-time</span>
+                        </div>
+
+                        <div class="grid gap-4">
+                            <template x-for="room in filteredRooms" :key="room.id">
+                                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-md hover:border-slate-600 transition space-y-3">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-lg text-xs font-semibold" x-text="room.gameType"></span>
+                                            <span class="bg-slate-700 text-slate-300 px-3 py-1 rounded-lg text-xs" x-text="room.playMode"></span>
+                                        </div>
+                                        <span class="text-xs text-amber-400 font-medium bg-amber-400/10 px-2 py-1 rounded-md" x-text="room.level"></span>
+                                    </div>
+
+                                    <div>
+                                        <h3 class="text-xl font-bold text-white mb-1" x-text="room.title"></h3>
+                                        <p class="text-slate-300 text-sm" x-text="room.note"></p>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm text-slate-400 pt-2 border-t border-slate-700/60">
+                                        <div>📍 สถานที่: <strong class="text-slate-200" x-text="room.location"></strong></div>
+                                        <div>📅 วันเวลา: <strong class="text-slate-200" x-text="room.datetime"></strong></div>
+                                        <div>⏳ ระยะเวลา: <strong class="text-slate-200" x-text="room.duration"></strong></div>
+                                    </div>
+
+                                    <div class="flex justify-between items-center pt-2">
+                                        <div class="flex items-center space-x-2 text-sm text-slate-400">
+                                            <span>ผู้สร้าง: <strong class="text-slate-200" x-text="room.host"></strong></span>
+                                            <span class="text-emerald-400 text-xs bg-emerald-950/50 px-2 py-0.5 rounded">⭐ 4.9</span>
+                                        </div>
+                                        <button @click="joinRoom(room)" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition min-h-[48px]">
+                                            ขอเข้าร่วมวง
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template x-if="filteredRooms.length === 0">
+                                <div class="text-center py-12 bg-slate-800/50 border border-dashed border-slate-700 rounded-2xl">
+                                    <p class="text-slate-400 text-base mb-2">ยังไม่มีประกาศในหมวดหมู่นี้</p>
+                                    <button @click="openCreateModal()" class="text-amber-400 font-semibold hover:underline">สร้างประกาศแรกเลย!</button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Profile (โปรไฟล์ผู้เล่น) -->
+                <div x-show="activeTab === 'profile'" class="space-y-6">
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 text-center space-y-4">
+                        <div class="w-20 h-20 bg-indigo-600 rounded-full mx-auto flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+                            🎮
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-white">สมชาย การ์ดเก่ง</h2>
+                            <p class="text-slate-400 text-sm">สมาชิกระดับ: ผู้เล่นสายแข่งขัน (Competitive)</p>
+                        </div>
+                        <div class="flex justify-center space-x-4 pt-2">
+                            <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
+                                <div class="text-xs text-slate-400">เรตติ้ง Fair Play</div>
+                                <div class="text-lg font-bold text-amber-400">⭐ 4.98</div>
+                            </div>
+                            <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
+                                <div class="text-xs text-slate-400">จำนวนนัดเล่น</div>
+                                <div class="text-lg font-bold text-indigo-400">34 ครั้ง</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
+                        <h3 class="text-lg font-semibold text-slate-200">ร้านการ์ดประจำ & ช่วงเวลาที่สะดวก</h3>
+                        <div class="space-y-2 text-sm text-slate-300">
+                            <p>🏢 <strong>ร้านประจำ:</strong> Gateway บางซื่อ / สยามพารากอน</p>
+                            <p>⏰ <strong>เวลาว่าง:</strong> เสาร์-อาทิตย์ 13:00 - 18:00 น.</p>
+                            <p>🃏 <strong>การ์ดที่เล่นหลัก:</strong> Pokémon TCG, One Piece Card Game</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </main>
+
+    <!-- Modal: สร้างโพสต์ชวนเล่น -->
+    <div x-show="isCreateModalOpen" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                <h3 class="text-xl font-bold text-white">สร้างโพสต์ชวนเพื่อนเล่นการ์ด</h3>
+                <button @click="isCreateModalOpen = false" class="text-slate-400 hover:text-white text-xl font-bold p-2">✕</button>
+            </div>
+
+            <form @submit.prevent="createRoom" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">หัวข้อประกาศชวนเล่น</label>
+                    <input type="text" x-model="newRoom.title" required placeholder="เช่น หาคนซ้อมเด็ค Meta โปเกม่อน แถวสยาม" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">ประเภทการ์ดเกม</label>
+                        <select x-model="newRoom.gameType" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-400 text-base">
+                            <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
+                            <option value="Pokémon TCG">Pokémon TCG</option>
+                            <option value="One Piece">One Piece Card Game</option>
+                            <option value="Vanguard">Cardfight!! Vanguard</option>
+                            <option value="Buddyfight">Buddyfight / ตลิ่งชัน</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">ระดับความจริงจัง</label>
+                        <select x-model="newRoom.level" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-400 text-base">
+                            <option value="ซ้อมมือชิลๆ">ซ้อมมือชิลๆ</option>
+                            <option value="มือใหม่หัดเล่น">มือใหม่หัดเล่น</option>
+                            <option value="แข่งจริงจัง (Competitive)">แข่งจริงจัง (Competitive)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">สถานที่ / ช่องทางออนไลน์</label>
+                        <input type="text" x-model="newRoom.location" required placeholder="เช่น ร้านการ์ดพารากอน หรือ Discord" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">วันและเวลา</label>
+                        <input type="text" x-model="newRoom.datetime" required placeholder="เช่น วันนี้ 14:00 น." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">ระยะเวลาที่จะเล่น</label>
+                    <input type="text" x-model="newRoom.duration" required placeholder="เช่น ประมาณ 2 ชั่วโมง" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">รายละเอียดเพิ่มเติม / โน้ต</label>
+                    <textarea x-model="newRoom.note" rows="3" placeholder="เช่น ขอคนเล่นเด็คธรรมดา ไม่เอาเมต้าโหดเกินไปครับ" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base"></textarea>
+                </div>
+
+                <div class="flex space-x-3 pt-2">
+                    <button type="button" @click="isCreateModalOpen = false" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-xl transition min-h-[48px]">ยกเลิก</button>
+                    <button type="submit" class="w-1/2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition min-h-[48px]">โพสต์ประกาศ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation Bar (Mobile Friendly) -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 max-w-4xl mx-auto flex justify-around p-2 z-40">
+        <button @click="activeTab = 'lobby'" :class="activeTab === 'lobby' ? 'text-amber-400' : 'text-slate-400'" class="flex flex-col items-center py-2 px-4 transition min-h-[48px]">
+            <span class="text-xl">🏠</span>
+            <span class="text-xs font-medium">หน้าแรก</span>
+        </button>
+        <button @click="openCreateModal()" class="flex flex-col items-center py-2 px-4 text-amber-400 transition min-h-[48px]">
+            <span class="text-xl">➕</span>
+            <span class="text-xs font-medium">สร้างโพสต์</span>
+        </button>
+        <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'text-amber-400' : 'text-slate-400'" class="flex flex-col items-center py-2 px-4 transition min-h-[48px]">
+            <span class="text-xl">👤</span>
+            <span class="text-xs font-medium">โปรไฟล์</span>
+        </button>
+    </nav>
+
+    <!-- Application Logic Script -->
+    <script>
+        function cardApp() {
+            return {
+                isLoading: false,
+                activeTab: 'lobby',
+                selectedGame: 'all',
+                isCreateModalOpen: false,
+                games: [
+                    { id: 'all', name: 'ทั้งหมด' },
+                    { id: 'Yu-Gi-Oh!', name: 'ยูกิโอ' },
+                    { id: 'Pokémon TCG', name: 'โปเกม่อน' },
+                    { id: 'One Piece', name: 'วันพีช' },
+                    { id: 'Vanguard', name: 'แวนการ์ด' },
+                    { id: 'Buddyfight', name: 'ตลิ่งชัน' }
+                ],
+                rooms: [
+                    {
+                        id: 1,
+                        gameType: 'Pokémon TCG',
+                        playMode: 'นัดเจอที่ร้าน',
+                        level: 'ซ้อมมือชิลๆ',
+                        title: 'หาคนซ้อมเด็ค Charizard แถวสยาม',
+                        note: 'ขอคนเล่นไม่เครียด มาลองเด็คใหม่กันครับ',
+                        location: 'การ์ดคลาสสิค สยามสแควร์',
+                        datetime: 'วันนี้ 15:00 น.',
+                        duration: '2 ชั่วโมง',
+                        host: 'คุณต้น การ์ดจอ'
+                    },
+                    {
+                        id: 2,
+                        gameType: 'Yu-Gi-Oh!',
+                        playMode: 'ออนไลน์ / Webcam',
+                        level: 'แข่งจริงจัง (Competitive)',
+                        title: 'หาคู่ซ้อมไต่อันดับ ลุยงานแข่งใหญ่',
+                        note: 'ใช้แบนลิสต์ปัจจุบัน ซ้อมยาวๆ 3 เกมรวด',
+                        location: 'Discord Online',
+                        datetime: 'พรุ่งนี้ 20:00 น.',
+                        duration: '1.5 ชั่วโมง',
+                        host: 'น้าเอก ยูกิ'
+                    },
+                    {
+                        id: 3,
+                        gameType: 'One Piece',
+                        playMode: 'นัดเจอที่ร้าน',
+                        level: 'มือใหม่หัดเล่น',
+                        title: 'มือใหม่หัดจับการ์ดวันพีช ใครว่างสอนทีครับ',
+                        note: 'เพิ่งซื้อ Starter Deck มา อยากลองจับคู่จริง',
+                        location: 'Gateway บางซื่อ',
+                        datetime: 'เสาร์นี้ 13:00 น.',
+                        duration: '2 ชั่วโมง',
+                        host: 'น้องเมย์ โปเกม่อน'
+                    }
+                ],
+                newRoom: {
+                    title: '',
+                    gameType: 'Pokémon TCG',
+                    level: 'ซ้อมมือชิลๆ',
+                    playMode: 'นัดเจอที่ร้าน',
+                    location: '',
+                    datetime: '',
+                    duration: '',
+                    note: ''
+                },
+                get filteredRooms() {
+                    if (this.selectedGame === 'all') return this.rooms;
+                    return this.rooms.filter(r => r.gameType === this.selectedGame);
+                },
+                openCreateModal() {
+                    this.isCreateModalOpen = true;
+                },
+                createRoom() {
+                    if(!this.newRoom.title || !this.newRoom.location) return;
+                    this.rooms.unshift({
+                        id: Date.now(),
+                        title: this.newRoom.title,
+                        gameType: this.newRoom.gameType,
+                        level: this.newRoom.level,
+                        playMode: this.newRoom.location.includes('Online') ? 'ออนไลน์ / Webcam' : 'นัดเจอที่ร้าน',
+                        location: this.newRoom.location,
+                        datetime: this.newRoom.datetime,
+                        duration: this.newRoom.duration,
+                        note: this.newRoom.note,
+                        host: 'ฉันเอง (ผู้ใช้งาน)'
+                    });
+                    // รีเซ็ตฟอร์ม
+                    this.newRoom = { title: '', gameType: 'Pokémon TCG', level: 'ซ้อมมือชิลๆ', playMode: 'นัดเจอที่ร้าน', location: '', datetime: '', duration: '', note: '' };
+                    this.isCreateModalOpen = false;
+                    alert('สร้างโพสต์ชวนเล่นสำเร็จ!');
+                },
+                joinRoom(room) {
+                    alert(`ส่งคำขอเข้าร่วมห้อง "${room.title}" เรียบร้อยแล้ว! โปรดรอเจ้าของห้องติดต่อกลับ`);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
