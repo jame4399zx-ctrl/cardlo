@@ -30,48 +30,107 @@
         .custom-popup .leaflet-popup-tip { background: #0f172a; }
         .custom-popup .leaflet-popup-content { margin:10px 12px; }
         .leaflet-control-zoom a { background:#0f172a !important; color:#e2e8f0 !important; border-color:#334155 !important; }
+        .status-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border-radius:999px; font-size:10px; font-weight:700; border:1px solid rgba(148,163,184,.2); }
+        .status-pending { background:rgba(245,158,11,.10); color:#fbbf24; border-color:rgba(245,158,11,.2); }
+        .status-accepted { background:rgba(99,102,241,.10); color:#a5b4fc; border-color:rgba(99,102,241,.2); }
+        .status-scheduled { background:rgba(14,165,233,.10); color:#7dd3fc; border-color:rgba(14,165,233,.2); }
+        .status-completed { background:rgba(16,185,129,.10); color:#6ee7b7; border-color:rgba(16,185,129,.2); }
+        .status-rejected, .status-cancelled { background:rgba(244,63,94,.10); color:#fda4af; border-color:rgba(244,63,94,.2); }
+        .notification-dot { box-shadow:0 0 0 2px #0f172a; }
+        .dashboard-card { background:linear-gradient(145deg,rgba(30,41,59,.82),rgba(15,23,42,.88)); border:1px solid rgba(99,102,241,.18); }
         @media (max-width:640px){ #map{height:380px}.map-controls{left:12px;right:12px}.map-control-btn{padding:7px 9px} }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between" x-data="cardApp()" x-init="initMap()">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between" x-data="cardApp()" x-init="initApp()">
 
+    <!-- Authentication Modal (Login / Register) -->
     <div x-show="!isLoggedIn" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
         <div class="glass-card max-w-md w-full rounded-3xl p-8 space-y-6 border border-slate-800 shadow-2xl relative overflow-hidden">
             <div class="absolute -top-10 -right-10 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl"></div>
+            
             <div class="text-center space-y-2">
                 <div class="inline-flex bg-gradient-to-tr from-amber-500 to-indigo-600 p-3 rounded-2xl font-black text-2xl text-slate-950 shadow-lg mb-2">CM</div>
                 <h1 class="text-2xl font-bold text-white">ยินดีต้อนรับสู่ CardMate</h1>
                 <p class="text-xs text-slate-400">สังคมคนเล่นการ์ดเกม เข้าสู่ระบบเพื่อค้นหาคู่เล่นใกล้คุณ</p>
             </div>
 
-            <div x-show="loginStep === 1" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-2">เบอร์โทรศัพท์มือถือ</label>
-                    <input type="tel" x-model="phone" placeholder="08X-XXX-XXXX" maxlength="10" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-amber-300 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
-                </div>
-                <button @click="requestOtp()" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-amber-500/20">
-                    ขอรับรหัส OTP
+            <!-- Tabs Navigation -->
+            <div class="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+                <button @click="authTab = 'login'" :class="authTab === 'login' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'" class="w-1/2 py-2 rounded-lg transition text-center">
+                    เข้าสู่ระบบ
+                </button>
+                <button @click="authTab = 'register'" :class="authTab === 'register' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'" class="w-1/2 py-2 rounded-lg transition text-center">
+                    สมัครสมาชิกใหม่
                 </button>
             </div>
 
-            <div x-show="loginStep === 2" class="space-y-4">
-                <div class="text-center">
-                    <span class="text-xs text-indigo-400">ส่งรหัส OTP ไปที่เบอร์ <strong x-text="phone"></strong></span>
-                    <p class="text-[11px] text-slate-500 mt-1">(ทดสอบ: ใช้รหัส OTP คือ <span class="text-amber-400 font-bold">123456</span>)</p>
+            <!-- Login Form -->
+            <div x-show="authTab === 'login'" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">ชื่อผู้ใช้ หรือ เบอร์โทรศัพท์</label>
+                    <input type="text" x-model="loginForm.usernameOrPhone" placeholder="กรอกชื่อผู้ใช้ หรือ เบอร์โทร" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium text-amber-300 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
                 </div>
                 <div>
-                    <input type="text" x-model="otpCode" placeholder="กรอกรหัส 6 หลัก" maxlength="6" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg font-bold text-white tracking-widest focus:outline-none focus:border-indigo-500 transition">
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">รหัสผ่าน</label>
+                    <input type="password" x-model="loginForm.password" placeholder="••••••••" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium text-white focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
                 </div>
-                <div class="flex space-x-2">
-                    <button @click="loginStep = 1" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl text-xs">ย้อนกลับ</button>
-                    <button @click="verifyOtp()" class="w-2/3 bg-gradient-to-r from-indigo-500 to-violet-600 hover:opacity-90 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-500/20">
-                        ยืนยันเข้าสู่ระบบ
-                    </button>
+                <button @click="handleLogin()" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-amber-500/20">
+                    เข้าสู่ระบบ
+                </button>
+            </div>
+
+            <!-- Register Form -->
+            <div x-show="authTab === 'register'" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">ชื่อผู้ใช้งาน (Display Name)</label>
+                    <input type="text" x-model="regForm.name" placeholder="เช่น พิษณุพงษ์ CardPlayer" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-medium text-white focus:outline-none focus:border-indigo-400 transition">
                 </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">เบอร์โทรศัพท์มือถือ</label>
+                    <input type="tel" x-model="regForm.phone" placeholder="08X-XXX-XXXX" maxlength="10" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-medium text-amber-300 focus:outline-none focus:border-indigo-400 transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">ตั้งรหัสผ่าน</label>
+                    <input type="password" x-model="regForm.password" placeholder="อย่างน้อย 4 ตัวอักษร" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-medium text-white focus:outline-none focus:border-indigo-400 transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">ยืนยันรหัสผ่าน</label>
+                    <input type="password" x-model="regForm.confirmPassword" placeholder="ยืนยันรหัสผ่านอีกครั้ง" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-medium text-white focus:outline-none focus:border-indigo-400 transition">
+                </div>
+                <button @click="openTermsModal()" class="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:opacity-90 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-500/20 mt-2">
+                    สมัครสมาชิก
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- Modal ข้อตกลงและเงื่อนไข (Terms & Conditions) -->
+    <div x-show="showTermsModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-card rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-700">
+            <div class="text-center space-y-1">
+                <div class="text-3xl">📜</div>
+                <h3 class="text-lg font-bold text-amber-400">ข้อตกลงและเงื่อนไขการใช้งาน</h3>
+                <p class="text-xs text-slate-400">กรุณาอ่านและยอมรับข้อตกลงก่อนเริ่มสร้างบัญชีใช้งาน</p>
+            </div>
+
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 text-xs text-slate-300 space-y-2 max-h-48 overflow-y-auto leading-relaxed">
+                <p>1. <strong>มารยาทในการเล่น:</strong> ผู้ใช้ต้องปฏิบัติตามกฎ Fair Play ให้เกียรติคู่เล่น และสร้างสังคมที่ดี</p>
+                <p>2. <strong>การนัดพบ:</strong> แนะนำให้นัดพบเล่นการ์ดในสถานที่สาธารณะ เช่น ร้านการ์ดเกมหรือบอร์ดเกมคาเฟ่ที่ปลอดภัย</p>
+                <p>3. <strong>ความปลอดภัยของข้อมูล:</strong> บัญชีและพิกัดของคุณจะถูกใช้เพื่อการจับคู่เล่นการ์ดเกมเท่านั้น</p>
+            </div>
+
+            <div class="flex space-x-3 pt-2">
+                <button @click="declineTerms()" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-xs transition">
+                    ปฏิเสธ / ยกเลิก
+                </button>
+                <button @click="acceptTermsAndRegister()" class="w-1/2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-500/20">
+                    ตกลง / ยอมรับ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content App -->
     <div x-show="isLoggedIn" class="flex flex-col min-h-screen">
         
         <header class="glass-nav border-b border-slate-800/80 sticky top-0 z-40">
@@ -84,8 +143,18 @@
                 </div>
                 
                 <div class="flex items-center space-x-2">
+                    <button @click="activeTab = 'notifications'" :class="activeTab === 'notifications' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'" class="relative px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                        <span>🔔 แจ้งเตือน</span>
+                        <span x-show="unreadNotifications > 0" x-text="unreadNotifications" class="notification-dot absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white rounded-full text-[9px] flex items-center justify-center"></span>
+                    </button>
+                    <button @click="activeTab = 'matches'" :class="activeTab === 'matches' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'" class="px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                        <span>🤝 Match</span>
+                    </button>
                     <button @click="activeTab = 'events'" :class="activeTab === 'events' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'" class="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
                         <span>🏪 ร้านค้า & อีเวนต์</span>
+                    </button>
+                    <button x-show="currentUser?.role === 'admin'" @click="activeTab = 'dashboard'" :class="activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'" class="px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                        <span>📊 Dashboard</span>
                     </button>
                     <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'" class="px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
                         <span>👤 โปรไฟล์</span>
@@ -196,6 +265,7 @@
                                                 <p class="truncate"><strong>🃏 เด็ค:</strong> <span x-text="player.favoriteDeck"></span></p>
                                                 <p class="truncate"><strong>📍 นัดพบ:</strong> <span x-text="player.locationName"></span> (<span x-text="player.distance + ' กม.'"></span>)</p>
                                                 <p class="truncate text-amber-300/90"><strong>⏰ เวลา:</strong> <span x-text="player.availability"></span></p>
+                                                <p class="truncate"><strong>📌 สถานะ:</strong> <span :class="player.status === 'closed' ? 'text-rose-300' : 'text-emerald-300'" x-text="player.status === 'closed' ? 'ปิดรับคำขอ' : 'เปิดรับคำขอ'"></span></p>
                                             </div>
                                         </div>
                                     </div>
@@ -205,12 +275,125 @@
                                     <button @click="showPlayerLocation(player)" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2 rounded-xl text-xs transition">
                                         🗺️ พิกัดร้าน
                                     </button>
-                                    <button @click="openMatchRequestModal(player)" class="w-2/3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 rounded-xl text-xs transition">
-                                        ✉️ ทักทาย/ท้าดวล
+                                    <button @click="openMatchRequestModal(player)" :class="player.status === 'closed' ? 'w-2/3 bg-slate-700 text-slate-400 cursor-not-allowed' : 'w-2/3 bg-amber-500 hover:bg-amber-400 text-slate-950'" class="font-bold py-2 rounded-xl text-xs transition">
+                                        <span x-text="player.status === 'closed' ? '🔒 ปิดรับคำขอ' : '✉️ ทักทาย/ท้าดวล'"></span>
                                     </button>
                                 </div>
                             </div>
                         </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Match Tracking -->
+            <div x-show="activeTab === 'matches'" class="space-y-5">
+                <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-900 to-slate-950 p-6 border border-indigo-500/20 shadow-xl">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                            <span class="text-[11px] text-indigo-300 font-semibold">🤝 Matchmaking Transaction</span>
+                            <h2 class="text-xl font-bold text-white mt-1">รายการ Match ของฉัน</h2>
+                            <p class="text-xs text-slate-400 mt-1">ติดตามคำขอ ตั้งแต่รอการตอบรับ → ตอบรับ → นัดหมาย → เล่นเสร็จ</p>
+                        </div>
+                        <span class="status-badge status-accepted" x-text="matchRequests.length + ' รายการ'" ></span>
+                    </div>
+                </div>
+
+                <div x-show="!myMatchRequests.length" class="glass-card rounded-2xl p-8 text-center text-slate-400 text-sm">
+                    ยังไม่มีรายการ Match ของคุณ
+                </div>
+
+                <div class="space-y-3">
+                    <template x-for="request in myMatchRequests" :key="request.id">
+                        <div class="glass-card rounded-2xl p-4 border border-slate-800 space-y-3">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="font-bold text-white text-sm" x-text="request.postTitle || request.targetName"></h3>
+                                    <p class="text-[11px] text-slate-400 mt-1" x-text="request.targetName"></p>
+                                </div>
+                                <span class="status-badge" :class="statusClass(request.status)" x-text="statusLabel(request.status)"></span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-300">
+                                <div class="bg-slate-900/70 rounded-xl p-3">🃏 <span x-text="request.game || '-'" ></span></div>
+                                <div class="bg-slate-900/70 rounded-xl p-3">📍 <span x-text="request.locationName || '-'" ></span></div>
+                                <div class="bg-slate-900/70 rounded-xl p-3">⏰ <span x-text="request.availability || '-'" ></span></div>
+                                <div class="bg-slate-900/70 rounded-xl p-3">🕒 <span x-text="formatDate(request.createdAt)" ></span></div>
+                            </div>
+                            <p class="text-xs text-slate-400" x-text="request.message ? '💬 ' + request.message : ''"></p>
+                            <div class="flex flex-wrap gap-2" x-show="request.senderId === currentUser?.id">
+                                <button x-show="request.status === 'pending'" @click="cancelMatchRequest(request.id)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-[11px] font-semibold">ยกเลิกคำขอ</button>
+                                <button x-show="request.status === 'accepted'" @click="updateMatchStatus(request.id,'scheduled')" class="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-2 rounded-xl text-[11px] font-semibold">📅 ยืนยันนัดหมาย</button>
+                                <button x-show="request.status === 'scheduled'" @click="updateMatchStatus(request.id,'completed')" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-2 rounded-xl text-[11px] font-bold">✅ ยืนยันว่าเล่นเสร็จแล้ว</button>
+                            </div>
+                            <div class="flex flex-wrap gap-2" x-show="request.receiverId === currentUser?.id">
+                                <button x-show="request.status === 'pending'" @click="respondToMatch(request.id,'accepted')" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-2 rounded-xl text-[11px] font-bold">✓ ตอบรับ</button>
+                                <button x-show="request.status === 'pending'" @click="respondToMatch(request.id,'rejected')" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 px-3 py-2 rounded-xl text-[11px] font-semibold">✕ ปฏิเสธ</button>
+                                <button x-show="request.status === 'accepted'" @click="updateMatchStatus(request.id,'scheduled')" class="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-2 rounded-xl text-[11px] font-semibold">📅 ยืนยันนัดหมาย</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Notification Center -->
+            <div x-show="activeTab === 'notifications'" class="space-y-5">
+                <div class="glass-card rounded-3xl p-6 border border-indigo-500/20">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-xl font-bold text-white">🔔 ศูนย์แจ้งเตือน</h2>
+                            <p class="text-xs text-slate-400 mt-1">แจ้งเตือนคำขอใหม่ การตอบรับ การยกเลิก และกำหนดการนัดหมาย</p>
+                        </div>
+                        <button @click="markAllNotificationsRead()" class="text-[10px] text-indigo-300 hover:text-indigo-200 underline">อ่านทั้งหมด</button>
+                    </div>
+                </div>
+                <div x-show="!notifications.length" class="glass-card rounded-2xl p-8 text-center text-slate-400 text-sm">ยังไม่มีการแจ้งเตือน</div>
+                <div class="space-y-2">
+                    <template x-for="notification in notifications" :key="notification.id">
+                        <button @click="openNotification(notification)" class="w-full text-left glass-card rounded-2xl p-4 border transition" :class="notification.read ? 'border-slate-800 opacity-75' : 'border-indigo-500/30 bg-indigo-950/20'">
+                            <div class="flex gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-lg">🔔</div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex justify-between gap-2">
+                                        <h3 class="font-bold text-white text-xs" x-text="notification.title"></h3>
+                                        <span x-show="!notification.read" class="w-2 h-2 bg-rose-500 rounded-full mt-1 flex-shrink-0"></span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 mt-1" x-text="notification.text"></p>
+                                    <p class="text-[10px] text-slate-500 mt-2" x-text="formatDate(notification.createdAt)"></p>
+                                </div>
+                            </div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Dashboard & Reports -->
+            <div x-show="activeTab === 'dashboard'" class="space-y-5">
+                <div class="glass-card rounded-3xl p-6 border border-indigo-500/20">
+                    <span class="text-[11px] text-indigo-300 font-semibold">📊 Dashboard & Reports</span>
+                    <h2 class="text-xl font-bold text-white mt-1">ภาพรวมระบบ CardMate</h2>
+                    <p class="text-xs text-slate-400 mt-1">สรุปข้อมูลผู้ใช้ โพสต์ คำขอ Match และอัตราการจับคู่สำเร็จ</p>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="dashboard-card rounded-2xl p-4"><span class="text-[10px] text-slate-400">👥 ผู้ใช้ทั้งหมด</span><div class="text-2xl font-black text-white mt-1" x-text="dashboardStats.users"></div></div>
+                    <div class="dashboard-card rounded-2xl p-4"><span class="text-[10px] text-slate-400">📝 โพสต์ทั้งหมด</span><div class="text-2xl font-black text-white mt-1" x-text="dashboardStats.posts"></div></div>
+                    <div class="dashboard-card rounded-2xl p-4"><span class="text-[10px] text-slate-400">🤝 Match ทั้งหมด</span><div class="text-2xl font-black text-white mt-1" x-text="dashboardStats.requests"></div></div>
+                    <div class="dashboard-card rounded-2xl p-4"><span class="text-[10px] text-slate-400">✅ สำเร็จ</span><div class="text-2xl font-black text-emerald-400 mt-1" x-text="dashboardStats.completed"></div></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="glass-card rounded-2xl p-5 space-y-3">
+                        <h3 class="font-bold text-white text-sm">📈 สถานะ Match</h3>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between"><span class="text-slate-400">รอการตอบรับ</span><b x-text="dashboardStats.pending"></b></div>
+                            <div class="flex justify-between"><span class="text-slate-400">ตอบรับแล้ว</span><b x-text="dashboardStats.accepted"></b></div>
+                            <div class="flex justify-between"><span class="text-slate-400">นัดหมายแล้ว</span><b x-text="dashboardStats.scheduled"></b></div>
+                            <div class="flex justify-between"><span class="text-slate-400">สำเร็จ</span><b class="text-emerald-400" x-text="dashboardStats.completed"></b></div>
+                            <div class="flex justify-between"><span class="text-slate-400">ปฏิเสธ/ยกเลิก</span><b class="text-rose-300" x-text="dashboardStats.failed"></b></div>
+                        </div>
+                    </div>
+                    <div class="glass-card rounded-2xl p-5 space-y-3">
+                        <h3 class="font-bold text-white text-sm">🎯 ตัวชี้วัดระบบ</h3>
+                        <div class="bg-slate-900/70 rounded-xl p-3"><span class="text-[10px] text-slate-500 block">อัตรา Match สำเร็จ</span><b class="text-xl text-indigo-300" x-text="dashboardStats.successRate + '%'" ></b></div>
+                        <div class="bg-slate-900/70 rounded-xl p-3"><span class="text-[10px] text-slate-500 block">Rating เฉลี่ยผู้ใช้</span><b class="text-xl text-amber-300" x-text="dashboardStats.avgRating" ></b></div>
+                        <div class="bg-slate-900/70 rounded-xl p-3"><span class="text-[10px] text-slate-500 block">โพสต์ที่เปิดรับ</span><b class="text-xl text-sky-300" x-text="dashboardStats.openPosts" ></b></div>
                     </div>
                 </div>
             </div>
@@ -246,22 +429,23 @@
                         </div>
                         <div class="space-y-1">
                             <div class="flex items-center space-x-2">
-                                <h2 class="text-xl font-bold text-white" x-text="user.name"></h2>
+                                <h2 class="text-xl font-bold text-white" x-text="currentUser?.name || 'ผู้ใช้งาน'"></h2>
                                 <span class="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold">✓ Verified</span>
                             </div>
-                            <p class="text-xs text-slate-400" x-text="'เบอร์โทร: ' + phone"></p>
-                            <p class="text-xs text-indigo-400" x-text="'📍 โซนประจำ: ' + user.zone"></p>
+                            <p class="text-xs text-slate-400" x-text="'เบอร์โทร: ' + (currentUser?.phone || '-')"></p>
+                            <p class="text-xs text-indigo-400" x-text="'📍 โซนประจำ: ' + (currentUser?.zone || 'ปทุมวัน / กรุงเทพฯ')"></p>
+                            <p class="text-[10px] text-slate-500" x-text="'สิทธิ์: ' + (currentUser?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน')"></p>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
                             <span class="text-[11px] text-slate-400 block">Rating ความประพฤติ</span>
-                            <span class="text-base font-bold text-amber-400" x-text="'⭐ ' + user.rating"></span>
+                            <span class="text-base font-bold text-amber-400" x-text="'⭐ ' + (currentUser?.rating || 5.0)"></span>
                         </div>
                         <div class="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
                             <span class="text-[11px] text-slate-400 block">แมตช์ที่เล่นแล้ว</span>
-                            <span class="text-base font-bold text-indigo-400" x-text="user.matchesCount + ' ครั้ง'"></span>
+                            <span class="text-base font-bold text-indigo-400" x-text="(currentUser?.matchesCount || 0) + ' ครั้ง'"></span>
                         </div>
                         <div class="col-span-2 sm:col-span-1 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-center">
                             <span class="text-[11px] text-slate-400 block">สถานะ Fair Play</span>
@@ -269,7 +453,26 @@
                         </div>
                     </div>
 
-                    <button @click="isLoggedIn = false" class="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 py-2.5 rounded-xl text-xs font-bold transition">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-bold text-white text-sm">📝 โพสต์ของฉัน</h3>
+                            <span class="text-[10px] text-slate-500" x-text="players.filter(p => p.ownerId === currentUser?.id).length + ' โพสต์'"></span>
+                        </div>
+                        <template x-for="post in players.filter(p => p.ownerId === currentUser?.id)" :key="post.id">
+                            <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <p class="text-xs font-bold text-white" x-text="post.games?.[0] + ' · ' + post.favoriteDeck"></p>
+                                    <p class="text-[10px] text-slate-500" x-text="post.locationName + ' · ' + post.availability"></p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button @click="closeMyPost(post.id)" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-300" x-text="post.status === 'closed' ? 'เปิดรับ' : 'ปิดรับ'"></button>
+                                    <button @click="deleteMyPost(post.id)" class="text-[10px] px-2.5 py-1.5 rounded-lg bg-rose-500/10 text-rose-300 border border-rose-500/20">ลบ</button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <button @click="logout()" class="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 py-2.5 rounded-xl text-xs font-bold transition">
                         ออกจากระบบ
                     </button>
                 </div>
@@ -277,6 +480,7 @@
 
         </main>
 
+        <!-- Create Post Modal -->
         <div x-show="isCreatePostModalOpen" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div class="glass-card rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-slate-700">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-3">
@@ -352,6 +556,7 @@
             </div>
         </div>
 
+        <!-- Match Request Modal -->
         <div x-show="isMatchModalOpen" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div class="glass-card rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
                 <h3 class="text-base font-bold text-amber-400" x-text="'ส่งคำขอเล่นถึง ' + (targetPlayer ? targetPlayer.name : '')"></h3>
@@ -365,6 +570,7 @@
             </div>
         </div>
 
+        <!-- Navigation Bar -->
         <nav class="fixed bottom-0 left-0 right-0 glass-nav border-t border-slate-800/80 max-w-5xl mx-auto flex justify-around p-2 z-40">
             <button @click="activeTab = 'search'" :class="activeTab === 'search' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center py-1">
                 <span class="text-base">🔍</span>
@@ -373,6 +579,19 @@
             <button @click="activeTab = 'events'" :class="activeTab === 'events' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center py-1">
                 <span class="text-base">🏆</span>
                 <span class="text-[10px]">ร้านค้า/อีเวนต์</span>
+            </button>
+            <button @click="activeTab = 'matches'" :class="activeTab === 'matches' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center py-1">
+                <span class="text-base">🤝</span>
+                <span class="text-[10px]">Match</span>
+            </button>
+            <button @click="activeTab = 'notifications'" :class="activeTab === 'notifications' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="relative flex flex-col items-center py-1">
+                <span class="text-base">🔔</span>
+                <span class="text-[10px]">แจ้งเตือน</span>
+                <span x-show="unreadNotifications > 0" x-text="unreadNotifications" class="absolute top-0 right-1 min-w-[15px] h-[15px] px-0.5 bg-rose-500 text-white rounded-full text-[8px] flex items-center justify-center"></span>
+            </button>
+            <button @click="activeTab = 'dashboard'" x-show="currentUser?.role === 'admin'" :class="activeTab === 'dashboard' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center py-1">
+                <span class="text-base">📊</span>
+                <span class="text-[10px]">Dashboard</span>
             </button>
             <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'text-amber-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center py-1">
                 <span class="text-base">👤</span>
@@ -384,11 +603,24 @@
     <script>
         function cardApp() {
             return {
-                // Auth States
+                // Auth & Account States
                 isLoggedIn: false,
-                loginStep: 1,
-                phone: '',
-                otpCode: '',
+                authTab: 'login', // 'login' or 'register'
+                showTermsModal: false,
+                usersList: [],
+                currentUser: null,
+
+                loginForm: {
+                    usernameOrPhone: '',
+                    password: ''
+                },
+
+                regForm: {
+                    name: '',
+                    phone: '',
+                    password: '',
+                    confirmPassword: ''
+                },
 
                 // App States
                 activeTab: 'search',
@@ -404,6 +636,10 @@
                 isCreatePostModalOpen: false,
                 targetPlayer: null,
                 matchMessage: '',
+                notifications: [],
+                unreadNotifications: 0,
+                matchRequests: [],
+                userLocation: null,
 
                 // Post Creation Form
                 newPost: {
@@ -416,16 +652,6 @@
                     lng: 100.5342
                 },
 
-                // User Profile
-                user: {
-                    name: 'พิษณุพงษ์ CardPlayer',
-                    verified: true,
-                    level: 'Competitive',
-                    zone: 'ปทุมวัน / กรุงเทพฯ',
-                    rating: 4.98,
-                    matchesCount: 15
-                },
-
                 // Filters
                 filters: {
                     game: 'all',
@@ -434,7 +660,7 @@
                     sortBy: 'distance'
                 },
 
-                // Preset Locations ( real Bangkok locations with images )
+                // Preset Locations
                 presetLocations: [
                     { name: 'สยามสแควร์ (Card Game Zone)', lat: 13.7456, lng: 100.5342, img: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&q=80', zone: 'ปทุมวัน, กรุงเทพฯ' },
                     { name: 'Gateway บางซื่อ TCG Space', lat: 13.8041, lng: 100.5226, img: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400&q=80', zone: 'บางซื่อ, กรุงเทพฯ' },
@@ -458,7 +684,9 @@
                         distance: 1.2,
                         zone: 'ปทุมวัน, กรุงเทพฯ',
                         availability: 'เสาร์-อาทิตย์ 13:00 - 18:00 น.',
-                        rating: 4.9
+                        rating: 4.9,
+                        ownerId: 1001,
+                        status: 'open'
                     },
                     {
                         id: 2,
@@ -475,7 +703,9 @@
                         distance: 6.5,
                         zone: 'บางซื่อ, กรุงเทพฯ',
                         availability: 'จันทร์-ศุกร์ 18:00 - 21:00 น.',
-                        rating: 4.8
+                        rating: 4.8,
+                        ownerId: 1002,
+                        status: 'open'
                     },
                     {
                         id: 3,
@@ -492,7 +722,9 @@
                         distance: 8.0,
                         zone: 'จตุจักร, กรุงเทพฯ',
                         availability: 'เสาร์ 14:00 - 17:00 น.',
-                        rating: 5.0
+                        rating: 5.0,
+                        ownerId: 1003,
+                        status: 'open'
                     }
                 ],
 
@@ -502,19 +734,152 @@
                     { id: 102, name: 'Monster TCG Shop', address: 'Gateway บางซื่อ ชั้น 3', lat: 13.8045, lng: 100.5230, event: 'Yu-Gi-Oh! Local Tournament', img: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400&q=80' }
                 ],
 
-                // Auth Functions
-                requestOtp() {
-                    if (this.phone.length < 9) return alert('กรุณากรอกเบอร์โทรศัพท์ให้ครบถ้วน');
-                    this.loginStep = 2;
+                // Init Application Data
+                initApp() {
+                    const savedUsers = localStorage.getItem('cardmate_users');
+                    if (savedUsers) {
+                        this.usersList = JSON.parse(savedUsers);
+                    } else {
+                        // Default mock user
+                        this.usersList = [
+                            {
+                                id: 100,
+                                name: 'พิษณุพงษ์ CardPlayer',
+                                phone: '0812345678',
+                                password: '123',
+                                verified: true,
+                                level: 'Competitive',
+                                zone: 'ปทุมวัน / กรุงเทพฯ',
+                                rating: 4.98,
+                                matchesCount: 15,
+                                role: 'admin',
+                                status: 'active'
+                            },
+                            { id: 1001, name: 'คุณต้น การ์ดจอ', phone: '0811111001', password: '123', verified: true, level: 'ทั่วไป', zone: 'ปทุมวัน, กรุงเทพฯ', rating: 4.9, matchesCount: 10, role: 'user', status: 'active' },
+                            { id: 1002, name: 'น้าเอก ยูกิ', phone: '0811111002', password: '123', verified: true, level: 'Competitive', zone: 'บางซื่อ, กรุงเทพฯ', rating: 4.8, matchesCount: 8, role: 'user', status: 'active' },
+                            { id: 1003, name: 'น้องเมย์ สายชิว', phone: '0811111003', password: '123', verified: false, level: 'มือใหม่', zone: 'จตุจักร, กรุงเทพฯ', rating: 5.0, matchesCount: 4, role: 'user', status: 'active' }
+                        ];
+                        localStorage.setItem('cardmate_users', JSON.stringify(this.usersList));
+                    }
+
+                    this.usersList = this.usersList.map(u => ({ ...u, role: u.role || 'user', status: u.status || 'active' }));
+                    const demoUsers = [
+                        { id: 1001, name: 'คุณต้น การ์ดจอ', phone: '0811111001', password: '123', verified: true, level: 'ทั่วไป', zone: 'ปทุมวัน, กรุงเทพฯ', rating: 4.9, matchesCount: 10, role: 'user', status: 'active' },
+                        { id: 1002, name: 'น้าเอก ยูกิ', phone: '0811111002', password: '123', verified: true, level: 'Competitive', zone: 'บางซื่อ, กรุงเทพฯ', rating: 4.8, matchesCount: 8, role: 'user', status: 'active' },
+                        { id: 1003, name: 'น้องเมย์ สายชิว', phone: '0811111003', password: '123', verified: false, level: 'มือใหม่', zone: 'จตุจักร, กรุงเทพฯ', rating: 5.0, matchesCount: 4, role: 'user', status: 'active' }
+                    ];
+                    demoUsers.forEach(demo => {
+                        if (!this.usersList.some(u => u.id === demo.id)) this.usersList.push(demo);
+                    });
+                    localStorage.setItem('cardmate_users', JSON.stringify(this.usersList));
+
+                    const savedRequests = localStorage.getItem('cardmate_match_requests');
+                    this.matchRequests = savedRequests ? JSON.parse(savedRequests) : [];
+                    const savedNotifications = localStorage.getItem('cardmate_notifications');
+                    this.notifications = savedNotifications ? JSON.parse(savedNotifications) : [];
+                    this.unreadNotifications = this.notifications.filter(n => !n.read && (!n.userId || n.userId === this.currentUser?.id)).length;
+                    const savedPosts = localStorage.getItem('cardmate_posts');
+                    if (savedPosts) {
+                        const savedPostList = JSON.parse(savedPosts);
+                        const savedIds = new Set(this.players.map(p => p.id));
+                        savedPostList.forEach(p => { if (!savedIds.has(p.id)) this.players.push(p); });
+                    }
+
+                    const activeUser = localStorage.getItem('cardmate_active_user');
+                    if (activeUser) {
+                        this.currentUser = JSON.parse(activeUser);
+                        this.currentUser.role = this.currentUser.role || 'user';
+                        this.isLoggedIn = true;
+                        this.refreshNotificationCount();
+                        this.initMap();
+                    }
                 },
 
-                verifyOtp() {
-                    if (this.otpCode === '123456') {
+                // Authentication Functions
+                handleLogin() {
+                    if (!this.loginForm.usernameOrPhone || !this.loginForm.password) {
+                        return alert('กรุณากรอกชื่อผู้ใช้/เบอร์โทร และรหัสผ่าน');
+                    }
+
+                    const foundUser = this.usersList.find(u => 
+                        (u.name === this.loginForm.usernameOrPhone || u.phone === this.loginForm.usernameOrPhone) && 
+                        u.password === this.loginForm.password
+                    );
+
+                    if (foundUser) {
+                        this.currentUser = foundUser;
+                        this.currentUser.role = this.currentUser.role || 'user';
                         this.isLoggedIn = true;
+                        this.refreshNotificationCount();
+                        localStorage.setItem('cardmate_active_user', JSON.stringify(this.currentUser));
+                        this.loginForm = { usernameOrPhone: '', password: '' };
                         this.initMap();
                     } else {
-                        alert('รหัส OTP ไม่ถูกต้อง (กรุณาใช้รหัส: 123456)');
+                        alert('ชื่อผู้ใช้ เบอร์โทร หรือรหัสผ่านไม่ถูกต้อง');
                     }
+                },
+
+                openTermsModal() {
+                    if (!this.regForm.name || !this.regForm.phone || !this.regForm.password) {
+                        return alert('กรุณากรอกข้อมูลการสมัครสมาชิกให้ครบถ้วน');
+                    }
+                    if (this.regForm.password.length < 4) {
+                        return alert('รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
+                    }
+                    if (this.regForm.password !== this.regForm.confirmPassword) {
+                        return alert('รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน');
+                    }
+
+                    const isDuplicate = this.usersList.some(u => u.phone === this.regForm.phone || u.name === this.regForm.name);
+                    if (isDuplicate) {
+                        return alert('ชื่อผู้ใช้งานหรือเบอร์โทรศัพท์นี้ถูกลงทะเบียนแล้ว');
+                    }
+
+                    this.showTermsModal = true;
+                },
+
+                declineTerms() {
+                    this.showTermsModal = false;
+                    alert('คุณได้ปฏิเสธข้อตกลง การสมัครสมาชิกถูกยกเลิก');
+                },
+
+                acceptTermsAndRegister() {
+                    const newUser = {
+                        id: Date.now(),
+                        name: this.regForm.name,
+                        phone: this.regForm.phone,
+                        password: this.regForm.password,
+                        verified: true,
+                        level: 'ทั่วไป',
+                        zone: 'กรุงเทพมหานคร',
+                        rating: 5.0,
+                        matchesCount: 0,
+                        role: 'user',
+                        status: 'active'
+                    };
+
+                    this.usersList.push(newUser);
+                    localStorage.setItem('cardmate_users', JSON.stringify(this.usersList));
+
+                    this.currentUser = newUser;
+                    this.isLoggedIn = true;
+                    localStorage.setItem('cardmate_active_user', JSON.stringify(newUser));
+                    this.notifications = [];
+                    this.matchRequests = this.matchRequests || [];
+                    this.refreshNotificationCount();
+
+                    this.showTermsModal = false;
+                    this.regForm = { name: '', phone: '', password: '', confirmPassword: '' };
+                    
+                    alert('สร้างบัญชีผู้ใช้ใหม่สำเร็จ! ยินดีต้อนรับสู่ CardMate');
+                    this.initMap();
+                },
+
+                logout() {
+                    this.isLoggedIn = false;
+                    this.currentUser = null;
+                    localStorage.removeItem('cardmate_active_user');
+                    this.unreadNotifications = 0;
                 },
 
                 // Filters Logic
@@ -561,7 +926,6 @@
                             if (tab === 'search' && this.map) setTimeout(() => this.map.invalidateSize(), 120);
                         });
 
-                        // ทำให้แผนที่ปรับขนาดถูกต้องหลังแสดงผล/เปลี่ยนแท็บ
                         setTimeout(() => this.map.invalidateSize(), 150);
                     }, 300);
                 },
@@ -585,7 +949,6 @@
                     if (!this.map) return;
                     this.clearPlayerMarkers();
 
-                    // แสดงเฉพาะผู้เล่นที่ผ่านตัวกรองปัจจุบัน
                     this.filteredPlayers.forEach(p => {
                         const popupContent = `
                             <div class="custom-popup text-xs" style="min-width:190px">
@@ -691,6 +1054,8 @@
                         maximumAge: 30000,
                         timeout: 10000
                     }).once('locationfound', (e) => {
+                        this.userLocation = { lat: e.latlng.lat, lng: e.latlng.lng, accuracy: e.accuracy };
+                        this.updateDistances();
                         if (this.userMarker) this.map.removeLayer(this.userMarker);
                         if (this.userAccuracyCircle) this.map.removeLayer(this.userAccuracyCircle);
 
@@ -726,7 +1091,6 @@
                 // Modal Actions
                 openCreatePostModal() {
                     this.isCreatePostModalOpen = true;
-                    // รอให้ modal แสดงผลก่อนสร้าง/ปรับขนาดแผนที่
                     setTimeout(() => this.initPostLocationMap(), 120);
                 },
 
@@ -851,7 +1215,7 @@
 
                     const newEntry = {
                         id: Date.now(),
-                        name: this.user.name + ' (โพสต์ของคุณ)',
+                        name: (this.currentUser?.name || 'ผู้ใช้งาน') + ' (โพสต์ของคุณ)',
                         avatar: '🧙‍♂️',
                         verified: true,
                         level: this.newPost.level,
@@ -864,10 +1228,16 @@
                         distance: 0.5,
                         zone: locZone,
                         availability: this.newPost.availability,
-                        rating: 5.0
+                        rating: 5.0,
+                        ownerId: this.currentUser?.id || null,
+                        status: 'open',
+                        createdAt: new Date().toISOString()
                     };
 
                     this.players.unshift(newEntry);
+                    const savedPosts = JSON.parse(localStorage.getItem('cardmate_posts') || '[]');
+                    savedPosts.unshift(newEntry);
+                    localStorage.setItem('cardmate_posts', JSON.stringify(savedPosts));
                     this.renderMapMarkers();
                     this.isCreatePostModalOpen = false;
 
@@ -878,7 +1248,32 @@
                     alert('สร้างโพสต์นัดเล่นสำเร็จแล้ว!');
                 },
 
+                closeMyPost(postId) {
+                    const post = this.players.find(p => p.id === postId && p.ownerId === this.currentUser?.id);
+                    if (!post) return;
+                    post.status = post.status === 'closed' ? 'open' : 'closed';
+                    const savedPosts = JSON.parse(localStorage.getItem('cardmate_posts') || '[]');
+                    const index = savedPosts.findIndex(p => p.id === postId);
+                    if (index >= 0) savedPosts[index] = post;
+                    localStorage.setItem('cardmate_posts', JSON.stringify(savedPosts));
+                    this.renderMapMarkers();
+                },
+
+                deleteMyPost(postId) {
+                    const post = this.players.find(p => p.id === postId && p.ownerId === this.currentUser?.id);
+                    if (!post) return;
+                    if (!confirm('ต้องการลบโพสต์นี้หรือไม่?')) return;
+                    this.players = this.players.filter(p => p.id !== postId);
+                    const savedPosts = JSON.parse(localStorage.getItem('cardmate_posts') || '[]').filter(p => p.id !== postId);
+                    localStorage.setItem('cardmate_posts', JSON.stringify(savedPosts));
+                    this.matchRequests = this.matchRequests.filter(r => r.postId !== postId);
+                    this.saveMatchRequests();
+                    this.renderMapMarkers();
+                },
+
                 openMatchRequestModal(player) {
+                    if (player.ownerId === this.currentUser?.id) return alert('นี่คือโพสต์ของคุณเอง');
+                    if (player.status === 'closed') return alert('โพสต์นี้ปิดรับคำขอแล้ว');
                     this.targetPlayer = player;
                     this.matchMessage = '';
                     this.isMatchModalOpen = true;
@@ -886,12 +1281,190 @@
 
                 sendMatchRequest() {
                     if (!this.matchMessage) return alert('กรุณาระบุข้อความสั้นๆ ถึงคู่เล่น');
-                    alert(`ส่งคำขอถึงคุณ "${this.targetPlayer.name}" เรียบร้อยแล้ว!`);
+                    if (!this.currentUser) return alert('กรุณาเข้าสู่ระบบก่อนส่งคำขอ');
+                    if (!this.targetPlayer) return alert('ไม่พบข้อมูลคู่เล่น');
+
+                    const duplicate = this.matchRequests.find(r =>
+                        r.senderId === this.currentUser.id &&
+                        r.postId === this.targetPlayer.id &&
+                        ['pending','accepted','scheduled'].includes(r.status)
+                    );
+                    if (duplicate) return alert('คุณมีคำขอสำหรับโพสต์นี้อยู่แล้ว');
+
+                    const request = {
+                        id: Date.now(),
+                        postId: this.targetPlayer.id,
+                        senderId: this.currentUser.id,
+                        receiverId: this.targetPlayer.ownerId || null,
+                        senderName: this.currentUser.name,
+                        targetName: this.targetPlayer.name,
+                        postTitle: `${this.targetPlayer.games?.[0] || 'การ์ดเกม'} · ${this.targetPlayer.favoriteDeck || ''}`,
+                        game: this.targetPlayer.games?.[0] || '',
+                        message: this.matchMessage,
+                        locationName: this.targetPlayer.locationName,
+                        lat: this.targetPlayer.lat,
+                        lng: this.targetPlayer.lng,
+                        availability: this.targetPlayer.availability,
+                        status: 'pending',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    this.matchRequests.unshift(request);
+                    this.saveMatchRequests();
+
+                    if (request.receiverId) {
+                        this.addNotification(request.receiverId, '🆕 มีคำขอเล่นใหม่', `${this.currentUser.name} ส่งคำขอเล่น ${request.game}`, request.id);
+                    }
+                    this.addNotification(this.currentUser.id, '✉️ ส่งคำขอสำเร็จ', `ส่งคำขอถึง ${request.targetName} แล้ว`, request.id);
+
                     this.isMatchModalOpen = false;
+                    this.activeTab = 'matches';
+                    alert(`ส่งคำขอถึงคุณ "${this.targetPlayer.name}" เรียบร้อยแล้ว!`);
+                },
+
+                saveMatchRequests() {
+                    localStorage.setItem('cardmate_match_requests', JSON.stringify(this.matchRequests));
+                },
+
+                saveNotifications() {
+                    localStorage.setItem('cardmate_notifications', JSON.stringify(this.notifications));
+                    this.refreshNotificationCount();
+                },
+
+                refreshNotificationCount() {
+                    const uid = this.currentUser?.id;
+                    this.unreadNotifications = this.notifications.filter(n => !n.read && (!n.userId || n.userId === uid)).length;
+                },
+
+                addNotification(userId, title, text, requestId = null) {
+                    this.notifications.unshift({
+                        id: Date.now() + Math.random(),
+                        userId,
+                        title,
+                        text,
+                        requestId,
+                        read: false,
+                        createdAt: new Date().toISOString()
+                    });
+                    this.saveNotifications();
+                },
+
+                markAllNotificationsRead() {
+                    const uid = this.currentUser?.id;
+                    this.notifications.forEach(n => {
+                        if (!n.userId || n.userId === uid) n.read = true;
+                    });
+                    this.saveNotifications();
+                },
+
+                openNotification(notification) {
+                    notification.read = true;
+                    this.saveNotifications();
+                    if (notification.requestId) this.activeTab = 'matches';
+                },
+
+                respondToMatch(requestId, status) {
+                    const request = this.matchRequests.find(r => r.id === requestId);
+                    if (!request || request.receiverId !== this.currentUser?.id) return;
+                    request.status = status;
+                    request.updatedAt = new Date().toISOString();
+                    this.saveMatchRequests();
+                    const label = status === 'accepted' ? 'ตอบรับคำขอเล่นแล้ว' : 'ปฏิเสธคำขอเล่น';
+                    this.addNotification(request.senderId, status === 'accepted' ? '✅ คำขอได้รับการตอบรับ' : '❌ คำขอถูกปฏิเสธ', `${this.currentUser.name} ${label}`, request.id);
+                    alert(status === 'accepted' ? 'ตอบรับคำขอเล่นแล้ว' : 'ปฏิเสธคำขอเล่นแล้ว');
+                },
+
+                cancelMatchRequest(requestId) {
+                    const request = this.matchRequests.find(r => r.id === requestId);
+                    if (!request || request.senderId !== this.currentUser?.id) return;
+                    request.status = 'cancelled';
+                    request.updatedAt = new Date().toISOString();
+                    this.saveMatchRequests();
+                    if (request.receiverId) this.addNotification(request.receiverId, '⚠️ คำขอถูกยกเลิก', `${this.currentUser.name} ยกเลิกคำขอเล่น`, request.id);
+                },
+
+                updateMatchStatus(requestId, status) {
+                    const request = this.matchRequests.find(r => r.id === requestId);
+                    if (!request) return;
+                    if (![request.senderId, request.receiverId].includes(this.currentUser?.id)) return;
+                    request.status = status;
+                    request.updatedAt = new Date().toISOString();
+                    this.saveMatchRequests();
+                    const otherUser = request.senderId === this.currentUser.id ? request.receiverId : request.senderId;
+                    if (otherUser) this.addNotification(otherUser, status === 'completed' ? '🎉 Match สำเร็จ' : '📅 อัปเดตสถานะ Match', status === 'completed' ? 'การเล่นรายการนี้เสร็จสิ้นแล้ว' : 'มีการยืนยันนัดหมายแล้ว', request.id);
+                    if (status === 'completed') {
+                        const me = this.usersList.find(u => u.id === this.currentUser.id);
+                        if (me) {
+                            me.matchesCount = (me.matchesCount || 0) + 1;
+                            this.currentUser = me;
+                            localStorage.setItem('cardmate_users', JSON.stringify(this.usersList));
+                            localStorage.setItem('cardmate_active_user', JSON.stringify(me));
+                        }
+                    }
+                },
+
+                statusLabel(status) {
+                    return {pending:'🟡 รอการตอบรับ',accepted:'🟢 ตอบรับแล้ว',scheduled:'🔵 นัดหมายแล้ว',completed:'✅ สำเร็จ',rejected:'🔴 ปฏิเสธ',cancelled:'⚪ ยกเลิก'}[status] || status;
+                },
+
+                statusClass(status) {
+                    return {pending:'status-pending',accepted:'status-accepted',scheduled:'status-scheduled',completed:'status-completed',rejected:'status-rejected',cancelled:'status-cancelled'}[status] || 'status-pending';
+                },
+
+                formatDate(value) {
+                    if (!value) return '-';
+                    const d = new Date(value);
+                    if (Number.isNaN(d.getTime())) return value;
+                    return d.toLocaleString('th-TH', { dateStyle:'short', timeStyle:'short' });
+                },
+
+                get myMatchRequests() {
+                    if (!this.currentUser) return [];
+                    return this.matchRequests.filter(r => r.senderId === this.currentUser.id || r.receiverId === this.currentUser.id);
+                },
+
+                get dashboardStats() {
+                    const all = this.matchRequests;
+                    const completed = all.filter(r => r.status === 'completed').length;
+                    const failed = all.filter(r => ['rejected','cancelled'].includes(r.status)).length;
+                    const total = all.length;
+                    const avgRating = this.usersList.length ? (this.usersList.reduce((sum,u)=>sum + Number(u.rating || 0),0) / this.usersList.length).toFixed(2) : '0.00';
+                    return {
+                        users: this.usersList.length,
+                        posts: this.players.length,
+                        requests: total,
+                        pending: all.filter(r=>r.status==='pending').length,
+                        accepted: all.filter(r=>r.status==='accepted').length,
+                        scheduled: all.filter(r=>r.status==='scheduled').length,
+                        completed,
+                        failed,
+                        successRate: total ? Math.round((completed / total) * 100) : 0,
+                        avgRating,
+                        openPosts: this.players.filter(p => p.status !== 'closed').length
+                    };
+                },
+
+                calculateDistance(lat1, lng1, lat2, lng2) {
+                    const R = 6371;
+                    const dLat = (lat2-lat1) * Math.PI / 180;
+                    const dLng = (lng2-lng1) * Math.PI / 180;
+                    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+                    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                },
+
+                updateDistances() {
+                    if (!this.userLocation) return;
+                    this.players.forEach(p => {
+                        if (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))) {
+                            p.distance = Number(this.calculateDistance(this.userLocation.lat, this.userLocation.lng, p.lat, p.lng).toFixed(1));
+                        }
+                    });
+                    this.renderMapMarkers();
                 }
             }
         }
-    // ให้ปุ่มใน Leaflet popup เรียกกลับมาที่ Alpine component ได้
+
     window.cardMateFocusPlayer = function(id) {
         const el = document.querySelector('[x-data="cardApp()"]');
         if (el && el.__x) {
